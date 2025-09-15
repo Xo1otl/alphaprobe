@@ -1,0 +1,22 @@
+name: alphaprobe
+
+services:
+  devcontainer-cuda:
+    build:
+      dockerfile: Dockerfile
+    image: alphaprobe-devcontainer-cuda:latest
+    volumes:
+      - ../..:/workspaces/alphaprobe:cached
+    command: >
+      /bin/bash -c "sudo chown -R vscode:vscode /workspaces/alphaprobe && sleep infinity"
+    cap_add:
+      - all
+    security_opt:
+      - seccomp=unconfined
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
