@@ -31,4 +31,4 @@ members = ["artifacts/funsearch"]
 funsearch = { workspace = true }
 
 [tool.pyright]
-include = ["scripts"]
+include = ["scripts", "artifacts/funsearch"]
