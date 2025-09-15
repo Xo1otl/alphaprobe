@@ -1,0 +1,64 @@
+{
+    "folders": [
+        {
+            "name": "alphaprobe",
+            "path": "."
+        }
+    ],
+    "extensions": {"recommendations": ["vscodevim.vim"]},
+    "settings": {
+		// プログラミング言語
+		/* julia */
+		"julia.NumThreads": "auto",
+        /* python */
+		"python.analysis.typeCheckingMode": "strict",
+		"pylint.args": [
+			"--disable=C0111" // docstringがなくてもいちいち警告ださない
+		],
+		"[python]": {
+			"editor.defaultFormatter": "ms-python.black-formatter"
+		},
+		"notebook.formatOnSave.enabled": true,
+		/* js/ts */
+		"bun.runtime": "/home/vscode/.local/share/mise/installs/bun/1.2.21/bin/bun",
+		// "bun.debugTerminal.stopOnEntry": false,
+		"typescript.updateImportsOnFileMove.enabled": "always",
+		"[typescript]": {
+			"editor.defaultFormatter": "biomejs.biome"
+		},
+		"[typescriptreact]": {
+			"editor.defaultFormatter": "biomejs.biome"
+		},
+		"[javascript]": {
+			"editor.defaultFormatter": "biomejs.biome"
+		},
+		"[jsonc]": {
+			"editor.defaultFormatter": "biomejs.biome"
+		},
+		"[json]": {
+			"editor.defaultFormatter": "biomejs.biome"
+		},
+
+        // マークアップ言語
+        "plantuml.server": "https://www.plantuml.com/plantuml",
+
+        // その他
+        "git.confirmSync": false,
+		"git.autofetch": true,
+		"git.enableSmartCommit": true,
+		"vim.handleKeys": {
+			"<C-f>": false
+		},
+		"editor.codeLens": true,
+		"files.autoSave": "afterDelay",
+		"editor.formatOnSave": true, // Ctrl+sでリフォーマットする
+		"terminal.integrated.defaultProfile.linux": "fish",
+		"remote.autoForwardPortsFallback": 0,
+        "search.exclude": {
+            "**/.venv": true,
+            "**/node_modules": true,
+            "**/*.sum": true,
+            "**/*.lock": true
+        }
+    }
+}

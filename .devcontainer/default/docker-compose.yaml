@@ -1,0 +1,15 @@
+name: alphaprobe
+
+services:
+  devcontainer:
+    build:
+      dockerfile: Dockerfile
+    image: alphaprobe-devcontainer:latest
+    volumes:
+      - ../..:/workspaces/alphaprobe:cached
+    command: >
+      /bin/bash -c "sudo chown -R vscode:vscode /workspaces/alphaprobe && sleep infinity"
+    cap_add:
+      - all
+    security_opt:
+      - seccomp=unconfined

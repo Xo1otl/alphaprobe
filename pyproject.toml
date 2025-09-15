@@ -1,0 +1,30 @@
+[project]
+name = "alphaprobe"
+version = "0.1.0"
+description = "all in one monorepo"
+authors = [{ name = "Xolotl", email = "xolotl.mictl4n@gmail.com" }]
+requires-python = ">=3.13"
+dependencies = [
+    "notebook",
+    "nbconvert",
+    "playwright",
+]
+
+[project.optional-dependencies]
+cuda = ["jax[cuda]"]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = [
+    # "package_a",
+]
+
+[tool.uv.sources]
+# package_a = { workspace = true }
+
+[tool.pyright]
+include = [
+    "scripts",
+]
