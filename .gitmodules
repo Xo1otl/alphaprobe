@@ -1,0 +1,3 @@
+[submodule "artifacts/funsearch"]
+	path = artifacts/funsearch
+	url = git@github.com:Xo1otl/funsearch.git
