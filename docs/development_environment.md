@@ -7,7 +7,7 @@
 
 ## 概要
 
-すべての言語は "Single Folder Workspace" のコンセプトで設定されています。
+"Single Folder Workspace" のコンセプトで設定されています。
 
 ## 開発環境に含まれる主要なコンポーネント
 
