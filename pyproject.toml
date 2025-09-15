@@ -5,9 +5,17 @@ description = "all in one monorepo"
 authors = [{ name = "Xolotl", email = "xolotl.mictl4n@gmail.com" }]
 requires-python = ">=3.13"
 dependencies = [
-    "notebook",
+    # scriptsで必要なpackage
     "nbconvert",
     "playwright",
+
+    # Jupyterで使用するpackage
+    "notebook",
+    "matplotlib",
+    "japanize_matplotlib",
+
+    # workspace packages
+    "funsearch",
 ]
 
 [project.optional-dependencies]
@@ -17,14 +25,10 @@ cuda = ["jax[cuda]"]
 package = false
 
 [tool.uv.workspace]
-members = [
-    # "package_a",
-]
+members = ["artifacts/funsearch"]
 
 [tool.uv.sources]
-# package_a = { workspace = true }
+funsearch = { workspace = true }
 
 [tool.pyright]
-include = [
-    "scripts",
-]
+include = ["scripts"]
