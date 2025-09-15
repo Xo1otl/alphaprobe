@@ -33,6 +33,12 @@ done
 cd "$PROJECT_ROOT"
 echo "✅ Found workspace root and changed directory to: ${PROJECT_ROOT}"
 
+# --- 初期化処理が既に実行済みか確認 ---
+INITIALIZED_MARKER=".initialized"
+if [ -f "$INITIALIZED_MARKER" ]; then
+  echo "✅ Project already initialized. Skipping setup."
+  exit 0
+fi
 
 # --- 1. Gitサブモジュールの初期化と更新 ---
 echo "▶ Initializing and updating Git submodules..."
@@ -44,6 +50,7 @@ git submodule foreach 'git checkout main || true'
 echo "✔ Submodules are on the 'main' branch."
 
 # --- 2. 機密情報ファイル (secrets.tar.gz) の展開 ---
+# DockerfileのCOPYで使用するために、事前に展開しておく
 SECRETS_FILE="secrets.tar.gz"
 
 echo "▶ Checking for secrets archive ($SECRETS_FILE)..."
@@ -55,5 +62,10 @@ if [ -f "$SECRETS_FILE" ]; then
 else
   echo "  No ${SECRETS_FILE} found. Skipping extraction."
 fi
+
+# --- 初期化完了のマーカーファイルを作成 ---
+echo "▶ Creating initialization marker file..."
+touch "$INITIALIZED_MARKER"
+echo "✔ Marker file created."
 
 echo "✅ Initialization command finished successfully."
