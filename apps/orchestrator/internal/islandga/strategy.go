@@ -29,19 +29,46 @@ type LogEntry[G any, R cmp.Ordered] struct {
 
 // --- DI Function Types ---
 
-// ProposeFunc defines the function signature for creating a new offspring.
-// Implementers of this function MUST return a new, independent gene (deep copy).
 type ProposeFunc[G any, R cmp.Ordered] func(population []Individual[G, R]) (offspring G)
-
-// CloneFunc defines the function signature for deep-copying a gene.
 type CloneFunc[G any] func(g G) G
+type ReducerFunc[G any, R cmp.Ordered] func(island Island[G, R]) []Individual[G, R]
+type dispatchFunc[G any, R cmp.Ordered] func(state *State[G, R], reqCh chan<- ProposeReq[G, R])
+
+func UseReducer[G any, R cmp.Ordered](reducer ReducerFunc[G, R]) dispatchFunc[G, R] {
+	return func(state *State[G, R], reqCh chan<- ProposeReq[G, R]) {
+		for {
+			if state.EvaluationsCount >= state.TotalEvaluations || len(state.AvailableIslandIDs) == 0 {
+				return
+			}
+			randIndex := rand.Intn(len(state.AvailableIslandIDs))
+			islandID := state.AvailableIslandIDs[randIndex]
+
+			state.AvailableIslandIDs = append(state.AvailableIslandIDs[:randIndex], state.AvailableIslandIDs[randIndex+1:]...)
+			state.PendingIslands[islandID] = true
+
+			var selectedIsland Island[G, R]
+			for _, island := range state.Islands {
+				if island.ID() == islandID {
+					selectedIsland = island
+					break
+				}
+			}
+
+			if selectedIsland != nil {
+				populationForPropose := reducer(selectedIsland)
+				reqCh <- ProposeReq[G, R]{
+					IslandID:   islandID,
+					Population: populationForPropose,
+				}
+			}
+		}
+	}
+}
 
 // --- Runner ---
 
 // RunnerConfig holds the configuration for the GA runner.
 type RunnerConfig struct {
-	NumIslands        int
-	TotalEvaluations  int
 	MigrationInterval int
 	MigrationSize     int
 	Concurrency       int
@@ -52,10 +79,11 @@ type Runner[G any, R cmp.Ordered] struct {
 	config      RunnerConfig
 	proposeFn   ProposeFunc[G, R]
 	observeFn   ObserveFunc[G, R]
-	initFn      InitFunc[G, R]
 	cloneFn     CloneFunc[G]
+	dispatchFn  dispatchFunc[G, R]
 	initialBest R
 	logCh       chan<- LogEntry[G, R]
+	state       *State[G, R]
 }
 
 // NewRunner creates a new GA runner with the given functions and configuration.
@@ -63,19 +91,21 @@ func NewRunner[G any, R cmp.Ordered](
 	config RunnerConfig,
 	proposeFn ProposeFunc[G, R],
 	observeFn ObserveFunc[G, R],
-	initFn InitFunc[G, R],
 	cloneFn CloneFunc[G],
+	dispatchFn dispatchFunc[G, R],
 	initialBest R,
 	logCh chan<- LogEntry[G, R],
+	state *State[G, R],
 ) *Runner[G, R] {
 	return &Runner[G, R]{
 		config:      config,
 		proposeFn:   proposeFn,
 		observeFn:   observeFn,
-		initFn:      initFn,
 		cloneFn:     cloneFn,
+		dispatchFn:  dispatchFn,
 		initialBest: initialBest,
 		logCh:       logCh,
+		state:       state,
 	}
 }
 
@@ -87,76 +117,31 @@ func (r *Runner[G, R]) Run() *State[G, R] {
 
 	var wgPropose, wgObserve sync.WaitGroup
 
-	// Define the task functions for the pipeline
 	proposeTask := func(req ProposeReq[G, R]) Query[G, R] {
 		offspring := r.proposeFn(req.Population)
-		return Query[G, R]{
-			IslandID:  req.IslandID,
-			Offspring: offspring,
-		}
+		return Query[G, R]{IslandID: req.IslandID, Offspring: offspring}
 	}
 	observeTask := func(ctx Query[G, R]) Evidence[G, R] {
 		fitness := r.observeFn(ctx.Offspring)
 		return Evidence[G, R]{
-			IslandID: ctx.IslandID,
-			EvaluatedChild: Individual[G, R]{
-				Gene:    ctx.Offspring,
-				Fitness: fitness,
-			},
+			IslandID:       ctx.IslandID,
+			EvaluatedChild: Individual[G, R]{Gene: ctx.Offspring, Fitness: fitness},
 		}
 	}
 
-	// Setup worker pools using the pipeline module
 	pipeline.WorkerPool(r.config.Concurrency, proposeTask, proposeCh, observeCh, &wgPropose)
 	pipeline.WorkerPool(r.config.Concurrency, observeTask, observeCh, resultCh, &wgObserve)
 
-	go func() {
-		wgPropose.Wait()
-		close(observeCh)
-	}()
-	go func() {
-		wgObserve.Wait()
-		close(resultCh)
-	}()
+	go func() { wgPropose.Wait(); close(observeCh) }()
+	go func() { wgObserve.Wait(); close(resultCh) }()
 
-	state := NewInitialState(r.config.NumIslands, r.initFn, r.observeFn, r.initialBest)
-
-	// Execute the control loop using the pipeline module
-	pipeline.ControlLoop(
-		r.dispatch,
-		r.propagate,
-		r.shouldTerminate,
-		proposeCh,
-		resultCh,
-		state,
-	)
+	pipeline.ControlLoop(r.dispatchFn, r.propagate, r.shouldTerminate, proposeCh, resultCh, r.state)
 
 	close(proposeCh)
 	if r.logCh != nil {
 		close(r.logCh)
 	}
-
-	return state
-}
-
-// --- Control Loop Logic (passed to pipeline) ---
-
-func (r *Runner[G, R]) dispatch(state *State[G, R], reqCh chan<- ProposeReq[G, R]) {
-	for {
-		if state.EvaluationsCount >= r.config.TotalEvaluations || len(state.AvailableIslandIDs) == 0 {
-			return
-		}
-		randIndex := rand.Intn(len(state.AvailableIslandIDs))
-		islandID := state.AvailableIslandIDs[randIndex]
-
-		state.AvailableIslandIDs = append(state.AvailableIslandIDs[:randIndex], state.AvailableIslandIDs[randIndex+1:]...)
-		state.PendingIslands[islandID] = true
-
-		reqCh <- ProposeReq[G, R]{
-			IslandID:   islandID,
-			Population: state.Islands[islandID].Population,
-		}
-	}
+	return r.state
 }
 
 func (r *Runner[G, R]) propagate(state *State[G, R], result Evidence[G, R]) {
@@ -176,19 +161,31 @@ func (r *Runner[G, R]) propagate(state *State[G, R], result Evidence[G, R]) {
 		}
 	}
 
-	island := &state.Islands[islandID]
-	worstIndex := 0
-	for i := 1; i < len(island.Population); i++ {
-		if island.Population[i].Fitness > island.Population[worstIndex].Fitness {
-			worstIndex = i
+	var island Island[G, R]
+	for _, i := range state.Islands {
+		if i.ID() == islandID {
+			island = i
+			break
 		}
 	}
-	if evaluatedChild.Fitness < island.Population[worstIndex].Fitness {
-		island.Population[worstIndex] = evaluatedChild
+	if island == nil {
+		return // Should not happen
+	}
+
+	population := island.Population()
+	worstIndex := -1
+	var worstFitness R
+	for i, ind := range population {
+		if i == 0 || ind.Fitness > worstFitness {
+			worstIndex = i
+			worstFitness = ind.Fitness
+		}
+	}
+	if worstIndex != -1 && evaluatedChild.Fitness < worstFitness {
+		population[worstIndex] = evaluatedChild
 	}
 
 	if evaluatedChild.Fitness < state.GlobalBest.Fitness {
-		// No clone needed here, as proposeFn guarantees a new gene.
 		state.GlobalBest = evaluatedChild
 		if r.logCh != nil {
 			r.logCh <- LogEntry[G, R]{
@@ -202,16 +199,13 @@ func (r *Runner[G, R]) propagate(state *State[G, R], result Evidence[G, R]) {
 	if state.EvaluationsCount%r.config.MigrationInterval == 0 && state.EvaluationsCount > 0 {
 		r.migrate(state.Islands)
 		if r.logCh != nil {
-			r.logCh <- LogEntry[G, R]{
-				Type:       LogTypeMigration,
-				Evaluation: state.EvaluationsCount,
-			}
+			r.logCh <- LogEntry[G, R]{Type: LogTypeMigration, Evaluation: state.EvaluationsCount}
 		}
 	}
 }
 
 func (r *Runner[G, R]) shouldTerminate(state *State[G, R]) bool {
-	isEvaluationLimitReached := state.EvaluationsCount >= r.config.TotalEvaluations
+	isEvaluationLimitReached := state.EvaluationsCount >= state.TotalEvaluations
 	areAllTasksDone := len(state.PendingIslands) == 0
 	return isEvaluationLimitReached && areAllTasksDone
 }
@@ -223,13 +217,13 @@ func (r *Runner[G, R]) migrate(islands []Island[G, R]) {
 
 	migrantsPerIsland := make([][]Individual[G, R], len(islands))
 	for i, island := range islands {
-		sort.Slice(island.Population, func(a, b int) bool {
-			return island.Population[a].Fitness < island.Population[b].Fitness
+		population := island.Population()
+		sort.Slice(population, func(a, b int) bool {
+			return population[a].Fitness < population[b].Fitness
 		})
 		migrants := make([]Individual[G, R], r.config.MigrationSize)
 		for j := 0; j < r.config.MigrationSize; j++ {
-			// Use the injected clone function for a safe copy.
-			original := island.Population[j]
+			original := population[j]
 			migrants[j] = Individual[G, R]{
 				Gene:    r.cloneFn(original.Gene),
 				Fitness: original.Fitness,
@@ -241,13 +235,14 @@ func (r *Runner[G, R]) migrate(islands []Island[G, R]) {
 	for i := range islands {
 		targetIslandIndex := (i + 1) % len(islands)
 		migrants := migrantsPerIsland[i]
-		targetIsland := &islands[targetIslandIndex]
+		targetIsland := islands[targetIslandIndex]
+		targetPopulation := targetIsland.Population()
 
-		sort.Slice(targetIsland.Population, func(a, b int) bool {
-			return targetIsland.Population[a].Fitness > targetIsland.Population[b].Fitness
+		sort.Slice(targetPopulation, func(a, b int) bool {
+			return targetPopulation[a].Fitness > targetPopulation[b].Fitness
 		})
-		for j := 0; j < r.config.MigrationSize && j < len(targetIsland.Population); j++ {
-			targetIsland.Population[j] = migrants[j]
+		for j := 0; j < r.config.MigrationSize && j < len(targetPopulation); j++ {
+			targetPopulation[j] = migrants[j]
 		}
 	}
 }

@@ -33,6 +33,32 @@ var (
 	MutationStdDev = (SearchMax - SearchMin) * 0.05
 )
 
+// --- Island Implementation ---
+
+// Island implements the islandga.Island interface for the Rastrigin problem.
+type Island struct {
+	id         int
+	population []islandga.Individual[Gene, Fitness]
+}
+
+func NewIsland(id int, population []islandga.Individual[Gene, Fitness]) islandga.Island[Gene, Fitness] {
+	return &Island{id: id, population: population}
+}
+
+func (i *Island) ID() int { return i.id }
+func (i *Island) Population() []islandga.Individual[Gene, Fitness] {
+	return i.population
+}
+
+// --- Reducer ---
+
+// SimpleReducer is a basic reducer that returns the entire population.
+func SimpleReducer(island islandga.Island[Gene, Fitness]) []islandga.Individual[Gene, Fitness] {
+	return island.Population()
+}
+
+// --- GA Logic ---
+
 // Propose implements the variation part of the GA for Rastrigin.
 func Propose(population []islandga.Individual[Gene, Fitness]) Gene {
 	tournament := func() islandga.Individual[Gene, Fitness] {
@@ -79,7 +105,7 @@ func NewInitialPopulation(populationSize int) []islandga.Individual[Gene, Fitnes
 		}
 		population[i] = islandga.Individual[Gene, Fitness]{
 			Gene:    gene,
-			Fitness: math.MaxFloat64,
+			Fitness: *new(Fitness), // Initialize with zero value
 		}
 	}
 	return population

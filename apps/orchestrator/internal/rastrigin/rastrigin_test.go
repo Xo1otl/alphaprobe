@@ -1,4 +1,4 @@
-package main_test
+package rastrigin_test
 
 import (
 	"fmt"
@@ -12,7 +12,6 @@ import (
 )
 
 const (
-	// Test-specific parameters
 	populationSize   = 50
 	concurrency      = 8
 	numIslands       = 5
@@ -22,29 +21,30 @@ const (
 func TestGAExecutionWithRastrigin(t *testing.T) {
 	// 1. Configure the runner
 	config := islandga.RunnerConfig{
-		NumIslands:        numIslands,
-		TotalEvaluations:  totalEvaluations,
 		MigrationInterval: rastrigin.MigrationInterval,
 		MigrationSize:     rastrigin.MigrationSize,
 		Concurrency:       concurrency,
 	}
 
-	// 2. Define the initialization and clone functions using the rastrigin package
-	initFn := func(islandID int) []islandga.Individual[rastrigin.Gene, rastrigin.Fitness] {
-		return rastrigin.NewInitialPopulation(populationSize)
+	// 2. Create and initialize the islands
+	islands := make([]islandga.Island[rastrigin.Gene, rastrigin.Fitness], numIslands)
+	for i := range numIslands {
+		initialPopulation := rastrigin.NewInitialPopulation(populationSize)
+		islands[i] = rastrigin.NewIsland(i, initialPopulation)
 	}
 
-	cloneFn := func(g rastrigin.Gene) rastrigin.Gene {
-		newSlice := make(rastrigin.Gene, len(g))
-		copy(newSlice, g)
-		return newSlice
-	}
+	// 3. Create the initial state
+	initialState := islandga.NewInitialState(
+		islands,
+		rastrigin.Observe,
+		rastrigin.Fitness(math.MaxFloat64),
+		totalEvaluations,
+	)
 
-	// 3. Setup logging and a monitoring goroutine
+	// 4. Setup logging
 	logCh := make(chan islandga.LogEntry[rastrigin.Gene, rastrigin.Fitness], config.Concurrency*2)
 	var wgLog sync.WaitGroup
 	wgLog.Add(1)
-
 	var loggedEvaluations, loggedMigrations int
 	go func() {
 		defer wgLog.Done()
@@ -58,25 +58,32 @@ func TestGAExecutionWithRastrigin(t *testing.T) {
 		}
 	}()
 
-	// 4. Create a new runner and inject all dependencies
+	// 5. Define the clone function
+	cloneFn := func(g rastrigin.Gene) rastrigin.Gene {
+		newSlice := make(rastrigin.Gene, len(g))
+		copy(newSlice, g)
+		return newSlice
+	}
+
+	// 6. Create a new runner
 	runner := islandga.NewRunner(
 		config,
 		rastrigin.Propose,
 		rastrigin.Observe,
-		initFn,
 		cloneFn,
+		islandga.UseReducer(rastrigin.SimpleReducer),
 		rastrigin.Fitness(math.MaxFloat64),
 		logCh,
+		initialState,
 	)
 
-	// 5. Run the GA
+	// 7. Run the GA
 	startTime := time.Now()
 	finalState := runner.Run()
 	duration := time.Since(startTime)
+	wgLog.Wait()
 
-	wgLog.Wait() // Wait for the logger to finish processing
-
-	// 6. Print results and verify
+	// 8. Print results and verify
 	fmt.Printf("\n--- Search Finished in %s ---\n", duration)
 	fmt.Printf("Total Evaluations: %d\n", finalState.EvaluationsCount)
 	fmt.Printf("Final Global Best Fitness: %.8f\n", finalState.GlobalBest.Fitness)
@@ -85,18 +92,19 @@ func TestGAExecutionWithRastrigin(t *testing.T) {
 		t.Errorf("Expected best fitness to be close to 0, but got %f", finalState.GlobalBest.Fitness)
 	}
 
-	// 7. Verify counts from logs
-	initialEvals := numIslands * populationSize
+	// 9. Verify counts from logs
+	initialEvals := 0
+	for _, island := range islands {
+		initialEvals += len(island.Population())
+	}
 	runtimeEvals := finalState.EvaluationsCount - initialEvals
 	if loggedEvaluations != runtimeEvals {
 		t.Errorf("Logged evaluations mismatch: got %d, want %d", loggedEvaluations, runtimeEvals)
 	}
 
-	// Calculate the expected number of migrations based on the actual logic.
-	// The check happens for evaluation counts from (initialEvals + 1) to finalState.EvaluationsCount.
 	expectedMigrations := 0
 	for i := initialEvals + 1; i <= finalState.EvaluationsCount; i++ {
-		if i%config.MigrationInterval == 0 {
+		if i > 0 && i%config.MigrationInterval == 0 {
 			expectedMigrations++
 		}
 	}
