@@ -5,94 +5,93 @@ import (
 	"math/rand"
 	"sort"
 
-	"alphaprobe/orchestrator/internal/islandga"
+	"alphaprobe/orchestrator/internal/bilevel"
 )
 
-// Gene represents the chromosome for the Rastrigin problem.
-type Gene []float64
+// --- Type Aliases for Clarity ---
+// These types map the Rastrigin problem to the generic types of the island_v2.Runner.
+type Gene = []float64
+type Fitness = float64
+type Population = []Individual
 
-// Fitness represents the evaluation result for the Rastrigin problem.
-type Fitness float64
+type State = GaState            // S
+type ProposeIn = *Island        // PIn
+type Query = Gene               // Q
+type Context = RastriginContext // C
+type Evidence = Fitness         // E
 
-type InternalState = []islandga.Individual[Gene, Fitness]
+// --- Concrete Data Structures ---
 
-// --- GA/Rastrigin Constants ---
-const (
-	// -- GA Parameters --
-	NumDimensions  = 30
-	CrossoverRate  = 0.9
-	BLXAlpha       = 0.5
-	TournamentSize = 5
+// Individual holds the genetic information and fitness of a single entity.
+type Individual struct {
+	Gene    Gene
+	Fitness Fitness
+}
 
-	// -- Execution Control --
-	MigrationInterval = 25
-	MigrationSize     = 5
-)
-
-var (
-	SearchMin      = -5.12
-	SearchMax      = 5.12
-	MutationRate   = 1.0 / float64(NumDimensions)
-	MutationStdDev = (SearchMax - SearchMin) * 0.05
-)
-
-// --- Island Implementation ---
-
-// Island implements the islandga.Island interface for the Rastrigin problem.
+// Island represents a subpopulation. It is no longer an interface implementation,
+// but a concrete struct used by the Rastrigin logic.
 type Island struct {
-	id         int
-	population []islandga.Individual[Gene, Fitness]
+	ID         int
+	Population Population
 }
 
-func NewIsland(id int, population []islandga.Individual[Gene, Fitness]) islandga.Island[Gene, Fitness, InternalState] {
-	return &Island{id: id, population: population}
+// GaState holds the overall state of the genetic algorithm.
+type GaState struct {
+	Islands            []*Island
+	PendingIslands     map[int]bool
+	AvailableIslandIDs []int
+	EvaluationsCount   int
+	TotalEvaluations   int
+	MigrationInterval  int
+	MigrationSize      int
 }
 
-func (i *Island) ID() int { return i.id }
-
-func (i *Island) InternalState() InternalState {
-	return i.population
+// RastriginContext is the context object passed through the pipeline.
+// It carries the necessary information for the propagate function.
+type RastriginContext struct {
+	IslandID int
+	Gene     Gene // The original gene, to be re-associated with the fitness.
 }
 
-func (i *Island) Incorporate(individuals []islandga.Individual[Gene, Fitness]) {
-	sort.Slice(i.population, func(a, b int) bool {
-		return i.population[a].Fitness > i.population[b].Fitness // Sort worst first
-	})
+// --- State Initialization ---
 
-	for j := 0; j < len(individuals) && j < len(i.population); j++ {
-		if individuals[j].Fitness < i.population[j].Fitness {
-			i.population[j] = individuals[j]
-		}
+func NewInitialState(
+	islandPopulation int,
+	numIslands int,
+	totalEvaluations int,
+	migrationInterval int,
+	migrationSize int,
+) *GaState {
+	islands := make([]*Island, numIslands)
+	for i := range numIslands {
+		islands[i] = &Island{ID: i, Population: newInitialPopulation(islandPopulation)}
+	}
+
+	availableIDs := make([]int, len(islands))
+	for i, island := range islands {
+		availableIDs[i] = island.ID
+	}
+
+	return &GaState{
+		Islands:            islands,
+		PendingIslands:     make(map[int]bool),
+		AvailableIslandIDs: availableIDs,
+		EvaluationsCount:   0,
+		TotalEvaluations:   totalEvaluations,
+		MigrationInterval:  migrationInterval,
+		MigrationSize:      migrationSize,
 	}
 }
 
-func (i *Island) SelectMigrants(n int) []islandga.Individual[Gene, Fitness] {
-	sort.Slice(i.population, func(a, b int) bool {
-		return i.population[a].Fitness < i.population[b].Fitness // Sort best first
-	})
+// --- GA Logic (Propose/Observe) ---
 
-	count := min(n, len(i.population))
-	migrants := make([]islandga.Individual[Gene, Fitness], count)
-	for j := range count {
-		original := i.population[j]
-		newSlice := make(Gene, len(original.Gene))
-		copy(newSlice, original.Gene)
-		migrants[j] = islandga.Individual[Gene, Fitness]{
-			Gene:    newSlice,
-			Fitness: original.Fitness,
-		}
-	}
-	return migrants
-}
-
-// --- GA Logic ---
-
-// Propose implements the variation part of the GA for Rastrigin.
-func Propose(population InternalState) Gene {
-	tournament := func() islandga.Individual[Gene, Fitness] {
-		best := population[rand.Intn(len(population))]
-		for i := 1; i < TournamentSize; i++ {
-			competitor := population[rand.Intn(len(population))]
+// Propose generates a new gene and a context object from a given island.
+func Propose(island ProposeIn) (Query, Context) {
+	pop := island.Population
+	tournament := func() Individual {
+		best := pop[rand.Intn(len(pop))]
+		for i := 1; i < 5; i++ { // TournamentSize
+			competitor := pop[rand.Intn(len(pop))]
 			if competitor.Fitness < best.Fitness {
 				best = competitor
 			}
@@ -101,51 +100,93 @@ func Propose(population InternalState) Gene {
 	}
 	parent1, parent2 := tournament(), tournament()
 
-	var childChromosome Gene
-	if rand.Float64() < CrossoverRate {
-		childChromosome = crossoverBLXAlpha(parent1.Gene, parent2.Gene, BLXAlpha)
+	var childGene Gene
+	if rand.Float64() < 0.9 { // CrossoverRate
+		childGene = crossoverBLXAlpha(parent1.Gene, parent2.Gene, 0.5)
 	} else {
-		childChromosome = make(Gene, NumDimensions)
-		copy(childChromosome, parent1.Gene)
+		childGene = make(Gene, 30) // NumDimensions
+		copy(childGene, parent1.Gene)
 	}
 
-	for i := range childChromosome {
-		if rand.Float64() < MutationRate {
-			childChromosome[i] += rand.NormFloat64() * MutationStdDev
-			childChromosome[i] = math.Max(SearchMin, math.Min(SearchMax, childChromosome[i]))
+	for i := range childGene {
+		if rand.Float64() < 1.0/30.0 { // MutationRate
+			childGene[i] += rand.NormFloat64() * ((5.12 - (-5.12)) * 0.05) // StdDev
+			childGene[i] = math.Max(-5.12, math.Min(5.12, childGene[i]))
 		}
 	}
-	return childChromosome
-}
 
-// Observe implements the evaluation part of the GA for Rastrigin.
-func Observe(gene Gene) Fitness {
-	return rastrigin(gene)
-}
-
-// NewInitialPopulation creates and evaluates the first generation of individuals.
-func NewInitialPopulation(populationSize int) []islandga.Individual[Gene, Fitness] {
-	population := make([]islandga.Individual[Gene, Fitness], populationSize)
-	for i := range population {
-		gene := make(Gene, NumDimensions)
-		for j := range gene {
-			gene[j] = SearchMin + rand.Float64()*(SearchMax-SearchMin)
-		}
-		population[i] = islandga.Individual[Gene, Fitness]{
-			Gene:    gene,
-			Fitness: Observe(gene),
-		}
+	ctx := Context{
+		IslandID: island.ID,
+		Gene:     childGene,
 	}
-	return population
+	return childGene, ctx
 }
 
-func rastrigin(chromosome Gene) Fitness {
+// Observe evaluates a gene and returns its fitness.
+func Observe(gene Query) Evidence {
 	a := 10.0
-	sum := a * float64(len(chromosome))
-	for _, x := range chromosome {
+	sum := a * float64(len(gene))
+	for _, x := range gene {
 		sum += x*x - a*math.Cos(2*math.Pi*x)
 	}
 	return Fitness(sum)
+}
+
+// --- State Manipulation Functions for Runner ---
+
+// Dispatch selects an available island and sends it to the proposal channel.
+func Dispatch(state *GaState, proposeCh chan<- ProposeIn) {
+	if len(state.AvailableIslandIDs) == 0 {
+		return
+	}
+	randIndex := rand.Intn(len(state.AvailableIslandIDs))
+	islandID := state.AvailableIslandIDs[randIndex]
+
+	state.AvailableIslandIDs = append(state.AvailableIslandIDs[:randIndex], state.AvailableIslandIDs[randIndex+1:]...)
+	state.PendingIslands[islandID] = true
+
+	proposeCh <- state.Islands[islandID]
+}
+
+// Propagate incorporates the evaluation result and handles migration.
+func Propagate(state *GaState, result bilevel.Result[Evidence, Context]) {
+	ctx := result.Ctx
+	islandID := ctx.IslandID
+	evaluatedChild := Individual{Gene: ctx.Gene, Fitness: result.Evidence}
+
+	// Update state
+	delete(state.PendingIslands, islandID)
+	state.EvaluationsCount++
+	state.AvailableIslandIDs = append(state.AvailableIslandIDs, islandID)
+
+	// Incorporate result
+	incorporate(state.Islands[islandID], []Individual{evaluatedChild})
+
+	// Handle migration
+	if state.EvaluationsCount%state.MigrationInterval == 0 && state.EvaluationsCount > 0 {
+		migrate(state.Islands, state.MigrationSize)
+	}
+}
+
+// ShouldTerminate checks if the evaluation limit has been reached.
+func ShouldTerminate(state *GaState) bool {
+	isEvaluationLimitReached := state.EvaluationsCount >= state.TotalEvaluations
+	areAllTasksDone := len(state.PendingIslands) == 0
+	return isEvaluationLimitReached && areAllTasksDone
+}
+
+// --- Helper Functions ---
+
+func newInitialPopulation(size int) Population {
+	pop := make(Population, size)
+	for i := range pop {
+		gene := make(Gene, 30)
+		for j := range gene {
+			gene[j] = -5.12 + rand.Float64()*(5.12-(-5.12))
+		}
+		pop[i] = Individual{Gene: gene, Fitness: Observe(gene)}
+	}
+	return pop
 }
 
 func crossoverBLXAlpha(p1, p2 Gene, alpha float64) Gene {
@@ -154,12 +195,36 @@ func crossoverBLXAlpha(p1, p2 Gene, alpha float64) Gene {
 		d := math.Abs(p1[i] - p2[i])
 		minGene := math.Min(p1[i], p2[i]) - alpha*d
 		maxGene := math.Max(p1[i], p2[i]) + alpha*d
-		minGene = math.Max(SearchMin, minGene)
-		maxGene = math.Min(SearchMax, maxGene)
-		if minGene > maxGene {
-			minGene, maxGene = maxGene, minGene
-		}
 		child[i] = minGene + rand.Float64()*(maxGene-minGene)
 	}
 	return child
+}
+
+func incorporate(island *Island, individuals []Individual) {
+	sort.Slice(island.Population, func(a, b int) bool {
+		return island.Population[a].Fitness > island.Population[b].Fitness // Worst first
+	})
+	for j := 0; j < len(individuals) && j < len(island.Population); j++ {
+		if individuals[j].Fitness < island.Population[j].Fitness {
+			island.Population[j] = individuals[j]
+		}
+	}
+}
+
+func migrate(islands []*Island, migrationSize int) {
+	if len(islands) <= 1 {
+		return
+	}
+	allMigrants := make([][]Individual, len(islands))
+	for i, island := range islands {
+		sort.Slice(island.Population, func(a, b int) bool {
+			return island.Population[a].Fitness < island.Population[b].Fitness // Best first
+		})
+		count := min(migrationSize, len(island.Population))
+		allMigrants[i] = island.Population[:count]
+	}
+	for i, sourceIslandMigrants := range allMigrants {
+		targetIslandIndex := (i + 1) % len(islands)
+		incorporate(islands[targetIslandIndex], sourceIslandMigrants)
+	}
 }

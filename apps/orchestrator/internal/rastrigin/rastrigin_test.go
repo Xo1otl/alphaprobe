@@ -1,116 +1,70 @@
-package rastrigin_test
+package rastrigin
 
 import (
 	"fmt"
-	"math"
-	"sync"
 	"testing"
-	"time"
 
-	"alphaprobe/orchestrator/internal/islandga"
-	"alphaprobe/orchestrator/internal/rastrigin"
+	"alphaprobe/orchestrator/internal/bilevel"
 )
 
-const (
-	populationSize   = 50
-	concurrency      = 8
-	numIslands       = 5
-	totalEvaluations = 250000
-)
+func TestRastriginWithIslandV2Runner(t *testing.T) {
+	// --- Configuration ---
+	const (
+		islandPopulation  = 50
+		numIslands        = 5
+		totalEvaluations  = 250000
+		migrationInterval = 25
+		migrationSize     = 5
+		concurrency       = 8
+	)
 
-func TestGAExecutionWithRastrigin(t *testing.T) {
-	// 1. Configure the runner
-	config := islandga.RunnerConfig{
-		MigrationInterval: rastrigin.MigrationInterval,
-		MigrationSize:     rastrigin.MigrationSize,
-		Concurrency:       concurrency,
-	}
-
-	// 2. Create and initialize the islands
-	islands := make([]islandga.Island[rastrigin.Gene, rastrigin.Fitness, rastrigin.InternalState], numIslands)
-	for i := range numIslands {
-		// NewInitialPopulation now returns evaluated individuals
-		initialPopulation := rastrigin.NewInitialPopulation(populationSize)
-		islands[i] = rastrigin.NewIsland(i, initialPopulation)
-	}
-
-	// 3. Find the initial global best individual from all islands
-	initialGlobalBest := islandga.Individual[rastrigin.Gene, rastrigin.Fitness]{
-		Fitness: rastrigin.Fitness(math.MaxFloat64),
-	}
-	for _, island := range islands {
-		for _, ind := range island.InternalState() {
-			if ind.Fitness < initialGlobalBest.Fitness {
-				initialGlobalBest = ind
-			}
-		}
-	}
-
-	// 4. Create the initial state
-	initialState := islandga.NewInitialState(
-		islands,
-		initialGlobalBest,
+	// --- State Initialization ---
+	initialState := NewInitialState(
+		islandPopulation,
+		numIslands,
 		totalEvaluations,
+		migrationInterval,
+		migrationSize,
 	)
 
-	// 5. Setup logging
-	logCh := make(chan islandga.LogEntry[rastrigin.Gene, rastrigin.Fitness], config.Concurrency*2)
-	var wgLog sync.WaitGroup
-	wgLog.Add(1)
-	var loggedEvaluations, loggedMigrations int
-	go func() {
-		defer wgLog.Done()
-		for entry := range logCh {
-			switch entry.Type {
-			case islandga.LogTypeEvaluation:
-				loggedEvaluations++
-			case islandga.LogTypeMigration:
-				loggedMigrations++
+	// --- Runner Setup ---
+	runnerConfig := bilevel.RunnerConfig{
+		Concurrency: concurrency,
+	}
+	// The runner is now fully generic. We provide the concrete types for our Rastrigin problem.
+	runner := bilevel.NewRunner[*GaState](
+		runnerConfig,
+		Propose,
+		Observe,
+	)
+
+	// --- Execution ---
+	fmt.Println("--- Starting Rastrigin GA with redesigned island_v2 Runner ---")
+	runner.Run(
+		initialState,
+		Dispatch,
+		Propagate,
+		ShouldTerminate,
+	)
+	fmt.Println("--- Rastrigin GA Finished ---")
+
+	// --- Verification ---
+	var bestFitness Fitness = 1e6 // A very large number
+	for _, island := range initialState.Islands {
+		for _, individual := range island.Population {
+			if individual.Fitness < bestFitness {
+				bestFitness = individual.Fitness
 			}
 		}
-	}()
-
-	// 6. Create a new runner
-	runner := islandga.NewRunner(
-		config,
-		rastrigin.Propose,
-		rastrigin.Observe,
-		rastrigin.Fitness(math.MaxFloat64),
-		logCh,
-		initialState,
-	)
-
-	// 7. Run the GA
-	startTime := time.Now()
-	finalState := runner.Run()
-	duration := time.Since(startTime)
-	wgLog.Wait()
-
-	// 8. Print results and verify
-	fmt.Printf("\n--- Search Finished in %s ---\n", duration)
-	fmt.Printf("Total Evaluations: %d\n", finalState.EvaluationsCount)
-	fmt.Printf("Final Global Best Fitness: %.8f\n", finalState.GlobalBest.Fitness)
-
-	if finalState.GlobalBest.Fitness > 1.0 {
-		t.Errorf("Expected best fitness to be close to 0, but got %f", finalState.GlobalBest.Fitness)
 	}
 
-	// 9. Verify counts from logs
-	// Since the initial population is now pre-evaluated, the runner's evaluation count should match the logged evaluations.
-	if loggedEvaluations != finalState.EvaluationsCount {
-		t.Errorf("Logged evaluations mismatch: got %d, want %d", loggedEvaluations, finalState.EvaluationsCount)
-	}
+	fmt.Printf("Final best fitness: %f\n", bestFitness)
+	fmt.Printf("Total evaluations: %d\n", initialState.EvaluationsCount)
 
-	expectedMigrations := 0
-	// The evaluation count starts from 1 during the run.
-	for i := 1; i <= finalState.EvaluationsCount; i++ {
-		if i > 0 && i%config.MigrationInterval == 0 {
-			expectedMigrations++
-		}
+	if initialState.EvaluationsCount < totalEvaluations {
+		t.Errorf("Expected at least %d evaluations, but got %d", totalEvaluations, initialState.EvaluationsCount)
 	}
-	if loggedMigrations != expectedMigrations {
-		t.Errorf("Logged migrations mismatch: got %d, want %d", loggedMigrations, expectedMigrations)
+	if bestFitness > 0.001 { // Rastrigin's global minimum is 0. Expecting a value close to it.
+		t.Errorf("Expected best fitness to be less than 0.001, but got %f", bestFitness)
 	}
-	fmt.Printf("Logged Evaluations: %d\n", loggedEvaluations)
-	fmt.Printf("Logged Migrations: %d\n", loggedMigrations)
 }

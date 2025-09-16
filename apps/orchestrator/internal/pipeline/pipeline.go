@@ -25,9 +25,9 @@ func WorkerPool[Req, Res any](
 
 // ControlLoop manages the overall process, dispatching tasks and propagating results.
 func ControlLoop[S, Req, Res any](
-	dispatch func(state S, reqCh chan<- Req),
-	propagate func(state S, result Res),
-	shouldTerminate func(state S) bool,
+	dispatch DispatchFunc[S, Req],
+	propagate PropagateFunc[S, Res],
+	shouldTerminate ShouldTerminateFunc[S],
 	reqCh chan<- Req,
 	resCh <-chan Res,
 	state S,
@@ -50,3 +50,7 @@ func ControlLoop[S, Req, Res any](
 	fmt.Println("\n--- All pending tasks finished. ---")
 	fmt.Println("--- Control Loop Finished ---")
 }
+
+type DispatchFunc[S, Req any] = func(state S, reqCh chan<- Req)
+type PropagateFunc[S, Res any] = func(state S, result Res)
+type ShouldTerminateFunc[S any] = func(state S) bool
