@@ -44,7 +44,6 @@ type Runner[G any, R cmp.Ordered, S any] struct {
 	config      RunnerConfig
 	proposeFn   ProposeFunc[G, S]
 	observeFn   ObserveFunc[G, R]
-	cloneFn     CloneFunc[G]
 	initialBest R
 	logCh       chan<- LogEntry[G, R]
 	state       *State[G, R, S]
@@ -55,7 +54,6 @@ func NewRunner[G any, R cmp.Ordered, S any](
 	config RunnerConfig,
 	proposeFn ProposeFunc[G, S],
 	observeFn ObserveFunc[G, R],
-	cloneFn CloneFunc[G],
 	initialBest R,
 	logCh chan<- LogEntry[G, R],
 	state *State[G, R, S],
@@ -64,7 +62,6 @@ func NewRunner[G any, R cmp.Ordered, S any](
 		config:      config,
 		proposeFn:   proposeFn,
 		observeFn:   observeFn,
-		cloneFn:     cloneFn,
 		initialBest: initialBest,
 		logCh:       logCh,
 		state:       state,
@@ -194,7 +191,7 @@ func (r *Runner[G, R, S]) migrate(islands []Island[G, R, S]) {
 
 	allMigrants := make([][]Individual[G, R], len(islands))
 	for i, island := range islands {
-		allMigrants[i] = island.SelectMigrants(r.config.MigrationSize, r.cloneFn)
+		allMigrants[i] = island.SelectMigrants(r.config.MigrationSize)
 	}
 
 	for i, sourceIslandMigrants := range allMigrants {

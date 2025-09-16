@@ -69,7 +69,7 @@ func (i *Island) Incorporate(individuals []islandga.Individual[Gene, Fitness]) {
 	}
 }
 
-func (i *Island) SelectMigrants(n int, cloneFn islandga.CloneFunc[Gene]) []islandga.Individual[Gene, Fitness] {
+func (i *Island) SelectMigrants(n int) []islandga.Individual[Gene, Fitness] {
 	sort.Slice(i.population, func(a, b int) bool {
 		return i.population[a].Fitness < i.population[b].Fitness // Sort best first
 	})
@@ -78,8 +78,10 @@ func (i *Island) SelectMigrants(n int, cloneFn islandga.CloneFunc[Gene]) []islan
 	migrants := make([]islandga.Individual[Gene, Fitness], count)
 	for j := range count {
 		original := i.population[j]
+		newSlice := make(Gene, len(original.Gene))
+		copy(newSlice, original.Gene)
 		migrants[j] = islandga.Individual[Gene, Fitness]{
-			Gene:    cloneFn(original.Gene),
+			Gene:    newSlice,
 			Fitness: original.Fitness,
 		}
 	}

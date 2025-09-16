@@ -75,19 +75,11 @@ func TestGAExecutionWithRastrigin(t *testing.T) {
 		}
 	}()
 
-	// 5. Define the clone function
-	cloneFn := func(g rastrigin.Gene) rastrigin.Gene {
-		newSlice := make(rastrigin.Gene, len(g))
-		copy(newSlice, g)
-		return newSlice
-	}
-
 	// 6. Create a new runner
 	runner := islandga.NewRunner(
 		config,
 		rastrigin.Propose,
 		rastrigin.Observe,
-		cloneFn,
 		rastrigin.Fitness(math.MaxFloat64),
 		logCh,
 		initialState,

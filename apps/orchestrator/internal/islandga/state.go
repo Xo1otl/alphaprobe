@@ -31,7 +31,7 @@ type Island[G any, R cmp.Ordered, S any] interface {
 	ID() int
 	InternalState() S
 	Incorporate(individuals []Individual[G, R])
-	SelectMigrants(n int, cloneFn CloneFunc[G]) []Individual[G, R]
+	SelectMigrants(n int) []Individual[G, R]
 }
 
 type Individual[G any, R cmp.Ordered] struct {
@@ -42,7 +42,6 @@ type Individual[G any, R cmp.Ordered] struct {
 // --- DI Function Types ---
 
 type ObserveFunc[G any, R cmp.Ordered] func(gene G) R
-type CloneFunc[G any] func(g G) G
 
 // NewInitialState creates the initial state from a slice of pre-initialized islands.
 func NewInitialState[G any, R cmp.Ordered, S any](
