@@ -51,10 +51,7 @@ func NewIsland(id int, population []islandga.Individual[Gene, Fitness]) islandga
 func (i *Island) ID() int { return i.id }
 
 func (i *Island) InternalState() InternalState {
-	// Return a copy to prevent external modification of the slice header, though individuals are pointers.
-	popCopy := make([]islandga.Individual[Gene, Fitness], len(i.population))
-	copy(popCopy, i.population)
-	return popCopy
+	return i.population
 }
 
 func (i *Island) Incorporate(individuals []islandga.Individual[Gene, Fitness]) {
