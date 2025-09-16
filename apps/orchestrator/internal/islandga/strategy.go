@@ -9,6 +9,24 @@ import (
 	"alphaprobe/orchestrator/internal/pipeline"
 )
 
+// --- Logging ---
+
+type LogType int
+
+const (
+	LogTypeEvaluation LogType = iota
+	LogTypeMigration
+	LogTypeGlobalBestUpdate
+)
+
+type LogEntry[G any, R cmp.Ordered] struct {
+	Type       LogType
+	Evaluation int
+	IslandID   int
+	Fitness    R
+	GlobalBest Individual[G, R]
+}
+
 // --- DI Function Types ---
 
 // ProposeFunc defines the function signature for creating a new offspring.
@@ -37,6 +55,7 @@ type Runner[G any, R cmp.Ordered] struct {
 	initFn      InitFunc[G, R]
 	cloneFn     CloneFunc[G]
 	initialBest R
+	logCh       chan<- LogEntry[G, R]
 }
 
 // NewRunner creates a new GA runner with the given functions and configuration.
@@ -47,6 +66,7 @@ func NewRunner[G any, R cmp.Ordered](
 	initFn InitFunc[G, R],
 	cloneFn CloneFunc[G],
 	initialBest R,
+	logCh chan<- LogEntry[G, R],
 ) *Runner[G, R] {
 	return &Runner[G, R]{
 		config:      config,
@@ -55,6 +75,7 @@ func NewRunner[G any, R cmp.Ordered](
 		initFn:      initFn,
 		cloneFn:     cloneFn,
 		initialBest: initialBest,
+		logCh:       logCh,
 	}
 }
 
@@ -111,6 +132,9 @@ func (r *Runner[G, R]) Run() *State[G, R] {
 	)
 
 	close(proposeCh)
+	if r.logCh != nil {
+		close(r.logCh)
+	}
 
 	return state
 }
@@ -143,6 +167,15 @@ func (r *Runner[G, R]) propagate(state *State[G, R], result Evidence[G, R]) {
 	state.EvaluationsCount++
 	state.AvailableIslandIDs = append(state.AvailableIslandIDs, islandID)
 
+	if r.logCh != nil {
+		r.logCh <- LogEntry[G, R]{
+			Type:       LogTypeEvaluation,
+			Evaluation: state.EvaluationsCount,
+			IslandID:   islandID,
+			Fitness:    evaluatedChild.Fitness,
+		}
+	}
+
 	island := &state.Islands[islandID]
 	worstIndex := 0
 	for i := 1; i < len(island.Population); i++ {
@@ -157,10 +190,23 @@ func (r *Runner[G, R]) propagate(state *State[G, R], result Evidence[G, R]) {
 	if evaluatedChild.Fitness < state.GlobalBest.Fitness {
 		// No clone needed here, as proposeFn guarantees a new gene.
 		state.GlobalBest = evaluatedChild
+		if r.logCh != nil {
+			r.logCh <- LogEntry[G, R]{
+				Type:       LogTypeGlobalBestUpdate,
+				Evaluation: state.EvaluationsCount,
+				GlobalBest: state.GlobalBest,
+			}
+		}
 	}
 
 	if state.EvaluationsCount%r.config.MigrationInterval == 0 && state.EvaluationsCount > 0 {
 		r.migrate(state.Islands)
+		if r.logCh != nil {
+			r.logCh <- LogEntry[G, R]{
+				Type:       LogTypeMigration,
+				Evaluation: state.EvaluationsCount,
+			}
+		}
 	}
 }
 
