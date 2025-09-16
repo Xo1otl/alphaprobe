@@ -27,21 +27,38 @@ func TestGAExecutionWithRastrigin(t *testing.T) {
 	}
 
 	// 2. Create and initialize the islands
-	islands := make([]islandga.Island[rastrigin.Gene, rastrigin.Fitness], numIslands)
+	islands := make([]islandga.Island[rastrigin.Gene, rastrigin.Fitness, rastrigin.InternalState], numIslands)
 	for i := range numIslands {
+		// NewInitialPopulation now returns evaluated individuals
 		initialPopulation := rastrigin.NewInitialPopulation(populationSize)
 		islands[i] = rastrigin.NewIsland(i, initialPopulation)
 	}
 
-	// 3. Create the initial state
+	// 3. Find the initial global best individual from all islands
+	initialGlobalBest := islandga.Individual[rastrigin.Gene, rastrigin.Fitness]{
+		Fitness: rastrigin.Fitness(math.MaxFloat64),
+	}
+	for _, island := range islands {
+		// We need to cast the island to the concrete type to access Individuals()
+		rastriginIsland, ok := island.(*rastrigin.Island)
+		if !ok {
+			t.Fatal("Failed to cast island to *rastrigin.Island")
+		}
+		for _, ind := range rastriginIsland.InternalState() {
+			if ind.Fitness < initialGlobalBest.Fitness {
+				initialGlobalBest = ind
+			}
+		}
+	}
+
+	// 4. Create the initial state
 	initialState := islandga.NewInitialState(
 		islands,
-		rastrigin.Observe,
-		rastrigin.Fitness(math.MaxFloat64),
+		initialGlobalBest,
 		totalEvaluations,
 	)
 
-	// 4. Setup logging
+	// 5. Setup logging
 	logCh := make(chan islandga.LogEntry[rastrigin.Gene, rastrigin.Fitness], config.Concurrency*2)
 	var wgLog sync.WaitGroup
 	wgLog.Add(1)
@@ -71,7 +88,6 @@ func TestGAExecutionWithRastrigin(t *testing.T) {
 		rastrigin.Propose,
 		rastrigin.Observe,
 		cloneFn,
-		islandga.UseReducer(rastrigin.SimpleReducer),
 		rastrigin.Fitness(math.MaxFloat64),
 		logCh,
 		initialState,
@@ -93,17 +109,14 @@ func TestGAExecutionWithRastrigin(t *testing.T) {
 	}
 
 	// 9. Verify counts from logs
-	initialEvals := 0
-	for _, island := range islands {
-		initialEvals += len(island.Population())
-	}
-	runtimeEvals := finalState.EvaluationsCount - initialEvals
-	if loggedEvaluations != runtimeEvals {
-		t.Errorf("Logged evaluations mismatch: got %d, want %d", loggedEvaluations, runtimeEvals)
+	// Since the initial population is now pre-evaluated, the runner's evaluation count should match the logged evaluations.
+	if loggedEvaluations != finalState.EvaluationsCount {
+		t.Errorf("Logged evaluations mismatch: got %d, want %d", loggedEvaluations, finalState.EvaluationsCount)
 	}
 
 	expectedMigrations := 0
-	for i := initialEvals + 1; i <= finalState.EvaluationsCount; i++ {
+	// The evaluation count starts from 1 during the run.
+	for i := 1; i <= finalState.EvaluationsCount; i++ {
 		if i > 0 && i%config.MigrationInterval == 0 {
 			expectedMigrations++
 		}
@@ -111,6 +124,6 @@ func TestGAExecutionWithRastrigin(t *testing.T) {
 	if loggedMigrations != expectedMigrations {
 		t.Errorf("Logged migrations mismatch: got %d, want %d", loggedMigrations, expectedMigrations)
 	}
-	fmt.Printf("Logged Evaluations: %d (runtime)\n", loggedEvaluations)
+	fmt.Printf("Logged Evaluations: %d\n", loggedEvaluations)
 	fmt.Printf("Logged Migrations: %d\n", loggedMigrations)
 }

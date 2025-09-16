@@ -4,11 +4,6 @@ import "cmp"
 
 // --- Pipeline Data ---
 
-type ProposeReq[G any, R cmp.Ordered] struct {
-	IslandID   int
-	Population []Individual[G, R]
-}
-
 type Query[G any, R cmp.Ordered] struct {
 	IslandID  int
 	Offspring G
@@ -21,8 +16,8 @@ type Evidence[G any, R cmp.Ordered] struct {
 
 // --- State Management ---
 
-type State[G any, R cmp.Ordered] struct {
-	Islands            []Island[G, R]
+type State[G any, R cmp.Ordered, S any] struct {
+	Islands            []Island[G, R, S]
 	GlobalBest         Individual[G, R]
 	PendingIslands     map[int]bool
 	EvaluationsCount   int
@@ -32,9 +27,11 @@ type State[G any, R cmp.Ordered] struct {
 
 // --- Data Structures ---
 
-type Island[G any, R cmp.Ordered] interface {
+type Island[G any, R cmp.Ordered, S any] interface {
 	ID() int
-	Population() []Individual[G, R]
+	InternalState() S
+	Incorporate(individuals []Individual[G, R])
+	SelectMigrants(n int, cloneFn CloneFunc[G]) []Individual[G, R]
 }
 
 type Individual[G any, R cmp.Ordered] struct {
@@ -45,39 +42,24 @@ type Individual[G any, R cmp.Ordered] struct {
 // --- DI Function Types ---
 
 type ObserveFunc[G any, R cmp.Ordered] func(gene G) R
+type CloneFunc[G any] func(g G) G
 
 // NewInitialState creates the initial state from a slice of pre-initialized islands.
-func NewInitialState[G any, R cmp.Ordered](
-	islands []Island[G, R],
-	observeFn ObserveFunc[G, R],
-	initialBest R,
+func NewInitialState[G any, R cmp.Ordered, S any](
+	islands []Island[G, R, S],
+	initialGlobalBest Individual[G, R],
 	totalEvaluations int,
-) *State[G, R] {
-	globalBest := Individual[G, R]{Fitness: initialBest}
-	initialEvaluationCount := 0
+) *State[G, R, S] {
 	availableIDs := make([]int, len(islands))
-
 	for i, island := range islands {
 		availableIDs[i] = island.ID()
-		population := island.Population()
-		for j, ind := range population {
-			// Assuming initial population might not have fitness values.
-			if ind.Fitness == *new(R) {
-				fitness := observeFn(ind.Gene)
-				population[j].Fitness = fitness
-				initialEvaluationCount++
-			}
-			if population[j].Fitness < globalBest.Fitness {
-				globalBest = population[j]
-			}
-		}
 	}
 
-	return &State[G, R]{
+	return &State[G, R, S]{
 		Islands:            islands,
-		GlobalBest:         globalBest,
+		GlobalBest:         initialGlobalBest,
 		PendingIslands:     make(map[int]bool),
-		EvaluationsCount:   initialEvaluationCount,
+		EvaluationsCount:   0, // Evaluations start from 0, initial population is pre-evaluated.
 		AvailableIslandIDs: availableIDs,
 		TotalEvaluations:   totalEvaluations,
 	}
