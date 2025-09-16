@@ -39,12 +39,7 @@ func TestGAExecutionWithRastrigin(t *testing.T) {
 		Fitness: rastrigin.Fitness(math.MaxFloat64),
 	}
 	for _, island := range islands {
-		// We need to cast the island to the concrete type to access Individuals()
-		rastriginIsland, ok := island.(*rastrigin.Island)
-		if !ok {
-			t.Fatal("Failed to cast island to *rastrigin.Island")
-		}
-		for _, ind := range rastriginIsland.InternalState() {
+		for _, ind := range island.InternalState() {
 			if ind.Fitness < initialGlobalBest.Fitness {
 				initialGlobalBest = ind
 			}
