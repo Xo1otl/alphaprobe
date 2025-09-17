@@ -56,7 +56,7 @@ SECRETS_FILE="secrets.tar.gz"
 echo "▶ Checking for secrets archive ($SECRETS_FILE)..."
 if [ -f "$SECRETS_FILE" ]; then
   echo "  Found ${SECRETS_FILE}. Extracting for Dockerfile COPY..."
-  tar -xzvf "$SECRETS_FILE"
+  tar -xvf "$SECRETS_FILE"
   
   echo "✔ Secrets have been successfully extracted."
 else
