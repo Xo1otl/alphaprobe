@@ -31,7 +31,6 @@ func TestRastriginWithIslandV2Runner(t *testing.T) {
 	runnerConfig := bilevel.RunnerConfig{
 		Concurrency: concurrency,
 	}
-	// The runner is now fully generic. We provide the concrete types for our Rastrigin problem.
 	runner := bilevel.NewRunner[*GaState](
 		runnerConfig,
 		Propose,

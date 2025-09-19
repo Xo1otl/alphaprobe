@@ -18,7 +18,8 @@ Apply these guidelines when explicitly asked to "refine" (推敲).
 -   Aggressively apply Occam's Razor. Eliminate redundancy and simplify phrasing to distill the core instruction.
 
 ### 2. For Documents
--   Use the following structure as a basis:
-    1.  **Introduction:** Describes the overall purpose and background.
-    2.  **Abstract:** Provides a high-level summary and cross-cutting perspective.
-    3.  **Component Details:** Delve into each component individually in subsequent sections.
+-   **Structure:** Adhere to the following three-part structure. Use explicit Japanese titles for sections and do not use numbering.
+    1.  **導入:** Start with the concrete problem, specific event, or motivation that initiated the project.
+    2.  **概要:** Describe the project's generalized purpose, overall goals, and any cross-cutting concepts (e.g., architectural principles).
+    3.  **コンポーネント詳細:** Detail individual components, models, or concepts. Present these as a flat list, using the same heading level for each. Avoid deep nesting.
+-   **Tone:** Write in a formal, declarative style (「～だ」「～である」調).
