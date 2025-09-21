@@ -1,16 +1,17 @@
 {
-    "folders": [
-        {
-            "name": "alphaprobe",
-            "path": "."
-        }
-    ],
-    "extensions": {"recommendations": ["vscodevim.vim"]},
-    "settings": {
+	"folders": [
+		{
+			"name": "alphaprobe",
+			"path": "."
+		}
+	],
+	"extensions": { "recommendations": ["vscodevim.vim"] },
+	"settings": {
 		// プログラミング言語
 		/* julia */
 		"julia.NumThreads": "auto",
-        /* python */
+		/* python */
+		"python.defaultInterpreterPath": "/workspaces/alphaprobe/.venv/bin/python",
 		"python.analysis.typeCheckingMode": "strict",
 		"pylint.args": [
 			"--disable=C0111" // docstringがなくてもいちいち警告ださない
@@ -20,7 +21,7 @@
 		},
 		"notebook.formatOnSave.enabled": true,
 		/* js/ts */
-		"bun.runtime": "/home/vscode/.local/share/mise/installs/bun/1.2.21/bin/bun",
+		"bun.runtime": "/home/vscode/.local/share/mise/shims/bun",
 		// "bun.debugTerminal.stopOnEntry": false,
 		"typescript.updateImportsOnFileMove.enabled": "always",
 		"[typescript]": {
@@ -39,11 +40,11 @@
 			"editor.defaultFormatter": "biomejs.biome"
 		},
 
-        // マークアップ言語
-        "plantuml.server": "https://www.plantuml.com/plantuml",
+		// マークアップ言語
+		"plantuml.server": "https://www.plantuml.com/plantuml",
 
-        // その他
-        "git.confirmSync": false,
+		// その他
+		"git.confirmSync": false,
 		"git.autofetch": true,
 		"git.enableSmartCommit": true,
 		"vim.handleKeys": {
@@ -54,11 +55,11 @@
 		"editor.formatOnSave": true, // Ctrl+sでリフォーマットする
 		"terminal.integrated.defaultProfile.linux": "fish",
 		"remote.autoForwardPortsFallback": 0,
-        "search.exclude": {
-            "**/.venv": true,
-            "**/node_modules": true,
-            "**/*.sum": true,
-            "**/*.lock": true
-        }
-    }
+		"search.exclude": {
+			"**/.venv": true,
+			"**/node_modules": true,
+			"**/*.sum": true,
+			"**/*.lock": true
+		}
+	}
 }

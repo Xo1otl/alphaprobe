@@ -18,8 +18,16 @@ Apply these guidelines when explicitly asked to "refine" (推敲).
 -   Aggressively apply Occam's Razor. Eliminate redundancy and simplify phrasing to distill the core instruction.
 
 ### 2. For Documents
--   **Structure:** Adhere to the following three-part structure. Use explicit Japanese titles for sections and do not use numbering.
-    1.  **導入:** Start with the concrete problem, specific event, or motivation that initiated the project.
-    2.  **概要:** Describe the project's generalized purpose, overall goals, and any cross-cutting concepts (e.g., architectural principles).
-    3.  **コンポーネント詳細:** Detail individual components, models, or concepts. Present these as a flat list, using the same heading level for each. Avoid deep nesting.
--   **Tone:** Write in a formal, declarative style (「～だ」「～である」調).
+-   **Generation Process:** Refine documents by following a generative, two-step process.
+    1.  **First, establish the structure:**
+        *   Write the **`導入`** section, starting with the concrete problem or motivation.
+        *   Write the **`概要`** section. This section's role is to describe the project's overall purpose and explain the high-level architecture or the relationships between the core functional parts.
+        *   When introducing these core parts for the first time in the `概要`, **identify them using bold text (`**`)**. Do not go into their specific details here. This effectively creates the document's skeleton.
+    2.  **Then, flesh out the details:**
+        *   For each term that was bolded in the `概要`, create a dedicated section with the bolded term as its heading.
+        *   These new sections must be at the **same heading level** as `導入` and `概要`, creating a flat structure.
+        *   The content within these detail sections should be self-contained.
+-   **General Rules:**
+    *   Use explicit, descriptive titles for sections.
+    *   Write in a formal, declarative style (「～だ」「～である」調).
+    *   Avoid meta-commentary that describes the document's own structure.
