@@ -1,13 +1,14 @@
-package rastrigin
+package rastrigin_test
 
 import (
 	"fmt"
 	"testing"
 
 	"alphaprobe/orchestrator/internal/bilevel"
+	"alphaprobe/orchestrator/internal/rastrigin"
 )
 
-func TestRastriginWithIslandV2Runner(t *testing.T) {
+func TestRastriginWithRunnerV2(t *testing.T) {
 	// --- Configuration ---
 	const (
 		islandPopulation   = 50
@@ -15,12 +16,13 @@ func TestRastriginWithIslandV2Runner(t *testing.T) {
 		totalEvaluations   = 250000
 		migrationInterval  = 25
 		migrationSize      = 5
-		proposeConcurrency = 5 // 処理速度の差により、たとえproposeとobserveが1:1対応していても、並列数を分けた方が良い場合がある。
+		proposeConcurrency = 5
 		observeConcurrency = 5
+		maxQueueSize       = 100
 	)
 
 	// --- State Initialization ---
-	initialState := NewInitialState(
+	controller := rastrigin.NewController(
 		islandPopulation,
 		numIslands,
 		totalEvaluations,
@@ -29,29 +31,27 @@ func TestRastriginWithIslandV2Runner(t *testing.T) {
 	)
 
 	// --- Runner Setup ---
-	runnerConfig := bilevel.RunnerConfig{
-		ProposeConcurrency: proposeConcurrency,
-		ObserveConcurrency: observeConcurrency,
-	}
-	run := bilevel.New[*GaState](
-		runnerConfig,
-		Propose,
-		Observe,
+	// Use the simple NewV2 factory as Rastrigin is a 1:1 pipeline.
+	// We explicitly provide the generic type arguments for clarity.
+	run := bilevel.NewV2(
+		controller.Update,
+		rastrigin.Propose,
+		rastrigin.Observe,
+		proposeConcurrency,
+		observeConcurrency,
+		maxQueueSize,
 	)
 
 	// --- Execution ---
-	fmt.Println("--- Starting Rastrigin GA with redesigned island_v2 Runner ---")
-	run(
-		initialState,
-		Dispatch,
-		Propagate,
-		ShouldTerminate,
-	)
+	fmt.Println("--- Starting Rastrigin GA with RunnerV2 ---")
+	// The runner is started with initial tasks, which we get from a nil-call to Update.
+	initialTasks, _ := controller.Update(nil)
+	run(initialTasks)
 	fmt.Println("--- Rastrigin GA Finished ---")
 
 	// --- Verification ---
-	var bestFitness Fitness = 1e6 // A very large number
-	for _, island := range initialState.Islands {
+	var bestFitness rastrigin.Fitness = 1e6 // A very large number
+	for _, island := range controller.Islands {
 		for _, individual := range island.Population {
 			if individual.Fitness < bestFitness {
 				bestFitness = individual.Fitness
@@ -60,10 +60,10 @@ func TestRastriginWithIslandV2Runner(t *testing.T) {
 	}
 
 	fmt.Printf("Final best fitness: %f\n", bestFitness)
-	fmt.Printf("Total evaluations: %d\n", initialState.EvaluationsCount)
+	fmt.Printf("Total evaluations: %d\n", controller.EvaluationsCount)
 
-	if initialState.EvaluationsCount < totalEvaluations {
-		t.Errorf("Expected at least %d evaluations, but got %d", totalEvaluations, initialState.EvaluationsCount)
+	if controller.EvaluationsCount < totalEvaluations {
+		t.Errorf("Expected at least %d evaluations, but got %d", totalEvaluations, controller.EvaluationsCount)
 	}
 	if bestFitness > 0.001 { // Rastrigin's global minimum is 0. Expecting a value close to it.
 		t.Errorf("Expected best fitness to be less than 0.001, but got %f", bestFitness)

@@ -1,3 +1,5 @@
+// FIXME: nilチャンネルとselectを使い、dispatchを削除、newTasks, done := update(result)に変更
+// FIXME: 1:Nファンアウトに対応するために大幅な修正が必要
 package pipeline
 
 import (

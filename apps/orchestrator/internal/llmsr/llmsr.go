@@ -17,12 +17,12 @@ type Program struct {
 	Score    Score
 }
 
-type State = *LLMSRState      // S
-type ProposeIn = []Program    // PIn (List of parent programs)
-type ProposeOut = []ProgramSkeleton // PRes (Result from Propose stage: a batch of skeletons)
-type Query = ProgramSkeleton  // Q (Query for Observe stage: a single skeleton)
-type Context = LLMSRContext   // C
-type Evidence = Score         // E
+type State = *LLMSRState            // S
+type ProposeIn = []Program          // PIn (List of parent programs)
+type ProposeRes = []ProgramSkeleton // POut (Result from Propose stage: a batch of skeletons)
+type Query = ProgramSkeleton        // Q (Query for Observe stage: a single skeleton)
+type Context = LLMSRContext         // C
+type Evidence = Score               // E
 
 // --- Concrete Data Structures ---
 
@@ -50,7 +50,7 @@ type LLMSRContext struct {
 func NewInitialState(initialSkeleton ProgramSkeleton, maxEvaluations int) *LLMSRState {
 	initialProgram := Program{
 		Skeleton: initialSkeleton,
-		Score:    1e9, // A very large number representing unevaluated score
+		Score:    1e9, // A very large number repoutenting unevaluated score
 	}
 	return &LLMSRState{
 		Programs:         []Program{initialProgram},
@@ -66,10 +66,13 @@ func NewInitialState(initialSkeleton ProgramSkeleton, maxEvaluations int) *LLMSR
 // NewLLMSR creates the bilevel RunnerFunc for the LLMSR algorithm.
 // It wires up the propose, observe, and a fan-out adapter function.
 func NewLLMSR(config bilevel.RunnerConfig) bilevel.RunnerFunc[State, ProposeIn, Context, Evidence] {
+	// Create the full adapter function from the simple fan-out logic.
+	adapterFn := bilevel.NewFanOutAdapter(fanOutLogic)
+
 	return bilevel.NewWithAdapter[State](
 		config,
 		proposeFn,
-		fanOutAdapter,
+		adapterFn,
 		observeFn,
 	)
 }
@@ -77,7 +80,7 @@ func NewLLMSR(config bilevel.RunnerConfig) bilevel.RunnerFunc[State, ProposeIn, 
 // --- Mock Logic (Propose/Observe) & Adapter ---
 
 // proposeFn mocks the LLM call. It takes parent programs and returns a BATCH of new skeletons.
-func proposeFn(parents ProposeIn) (ProposeOut, Context) {
+func proposeFn(parents ProposeIn) (ProposeRes, Context) {
 	// In a real scenario, this would make a gRPC call to the Python worker.
 	// The worker would use the parent programs to construct a prompt for the LLM
 	// and request multiple completions (e.g., n=4).
@@ -99,23 +102,20 @@ func proposeFn(parents ProposeIn) (ProposeOut, Context) {
 	return newSkeletons, ctx
 }
 
-// fanOutAdapter takes a batch of skeletons from the propose stage and sends them
-// individually to the observe stage.
-func fanOutAdapter(
-	in <-chan bilevel.ProposeOut[ProposeOut, Context],
-	out chan<- bilevel.ObserveIn[Query, Context],
+// fanOutLogic provides the core transformation logic for the adapter.
+// It takes one result from the propose stage and sends out multiple queries to the observe stage.
+func fanOutLogic(
+	proposeOut bilevel.ProposeRes[ProposeRes, Context],
+	out chan<- bilevel.ObserveReq[Query, Context],
 ) {
-	defer close(out)
-	for proposeResult := range in {
-		for _, skeleton := range proposeResult.PRes {
-			// Create a new context for each individual skeleton to ensure
-			// the correct one is available in the propagate stage.
-			individualCtx := proposeResult.Ctx
-			individualCtx.EvaluatedSkeleton = skeleton
-			out <- bilevel.ObserveIn[Query, Context]{
-				Query: skeleton,
-				Ctx:   individualCtx,
-			}
+	for _, skeleton := range proposeOut.POut {
+		// Create a new context for each individual skeleton to ensure
+		// the correct one is available in the propagate stage.
+		individualCtx := proposeOut.Ctx
+		individualCtx.EvaluatedSkeleton = skeleton
+		out <- bilevel.ObserveReq[Query, Context]{
+			Query: skeleton,
+			Ctx:   individualCtx,
 		}
 	}
 }
@@ -156,7 +156,7 @@ func Dispatch(state *LLMSRState, proposeCh chan<- ProposeIn) {
 }
 
 // Propagate incorporates the evaluation result into the state.
-func Propagate(state *LLMSRState, result bilevel.Result[Evidence, Context]) {
+func Propagate(state *LLMSRState, result bilevel.ObserveRes[Evidence, Context]) {
 	state.EvaluationsCount++
 
 	// The evaluated skeleton is now correctly passed in the context.

@@ -9,16 +9,9 @@ import (
 )
 
 // --- Type Aliases for Clarity ---
-// These types map the Rastrigin problem to the generic types of the island_v2.Runner.
 type Gene = []float64
 type Fitness = float64
 type Population = []Individual
-
-type State = GaState            // S
-type ProposeIn = *Island        // PIn
-type Query = Gene               // Q
-type Context = RastriginContext // C
-type Evidence = Fitness         // E
 
 // --- Concrete Data Structures ---
 
@@ -28,15 +21,20 @@ type Individual struct {
 	Fitness Fitness
 }
 
-// Island represents a subpopulation. It is no longer an interface implementation,
-// but a concrete struct used by the Rastrigin logic.
+// Island repoutents a subpopulation.
 type Island struct {
 	ID         int
 	Population Population
 }
 
-// GaState holds the overall state of the genetic algorithm.
-type GaState struct {
+// Context is the context object passed through the pipeline.
+type Context struct {
+	IslandID int
+	Gene     Gene
+}
+
+// Controller holds the entire state and logic for the genetic algorithm.
+type Controller struct {
 	Islands            []*Island
 	PendingIslands     map[int]bool
 	AvailableIslandIDs []int
@@ -46,22 +44,14 @@ type GaState struct {
 	MigrationSize      int
 }
 
-// RastriginContext is the context object passed through the pipeline.
-// It carries the necessary information for the propagate function.
-type RastriginContext struct {
-	IslandID int
-	Gene     Gene // The original gene, to be re-associated with the fitness.
-}
-
-// --- State Initialization ---
-
-func NewInitialState(
+// NewController initializes the state for the GA.
+func NewController(
 	islandPopulation int,
 	numIslands int,
 	totalEvaluations int,
 	migrationInterval int,
 	migrationSize int,
-) *GaState {
+) *Controller {
 	islands := make([]*Island, numIslands)
 	for i := range numIslands {
 		islands[i] = &Island{ID: i, Population: newInitialPopulation(islandPopulation)}
@@ -72,7 +62,7 @@ func NewInitialState(
 		availableIDs[i] = island.ID
 	}
 
-	return &GaState{
+	return &Controller{
 		Islands:            islands,
 		PendingIslands:     make(map[int]bool),
 		AvailableIslandIDs: availableIDs,
@@ -83,10 +73,51 @@ func NewInitialState(
 	}
 }
 
+// Update is the core logic function that conforms to the runner's expected signature.
+// It incorporates results and dispatches new tasks.
+func (s *Controller) Update(result *bilevel.ObserveRes[Fitness, Context]) ([]*Island, bool) {
+	// --- 1. Incorporate the result from the last completed task (Propagate logic) ---
+	if result != nil {
+		ctx := result.Ctx
+		islandID := ctx.IslandID
+		evaluatedChild := Individual{Gene: ctx.Gene, Fitness: result.Evidence}
+
+		delete(s.PendingIslands, islandID)
+		s.EvaluationsCount++
+		s.AvailableIslandIDs = append(s.AvailableIslandIDs, islandID)
+
+		incorporate(s.Islands[islandID], []Individual{evaluatedChild})
+
+		if s.EvaluationsCount > 0 && s.EvaluationsCount%s.MigrationInterval == 0 {
+			migrate(s.Islands, s.MigrationSize)
+		}
+	}
+
+	// --- 2. Check for termination condition (ShouldTerminate logic) ---
+	if s.EvaluationsCount >= s.TotalEvaluations {
+		return nil, true // No new tasks, and terminate.
+	}
+
+	// --- 3. Prepare the next task(s) to be dispatched (Dispatch logic) ---
+	// In this simple GA, we dispatch one task for each result received (or for the initial call).
+	if len(s.AvailableIslandIDs) == 0 {
+		return nil, false // No tasks to dispatch right now, but don't terminate.
+	}
+
+	randIndex := rand.Intn(len(s.AvailableIslandIDs))
+	islandID := s.AvailableIslandIDs[randIndex]
+
+	s.AvailableIslandIDs = append(s.AvailableIslandIDs[:randIndex], s.AvailableIslandIDs[randIndex+1:]...)
+	s.PendingIslands[islandID] = true
+
+	nextTask := s.Islands[islandID]
+	return []*Island{nextTask}, false // Dispatch one task, and continue.
+}
+
 // --- GA Logic (Propose/Observe) ---
 
-// Propose generates a new gene and a context object from a given island.
-func Propose(island ProposeIn) (Query, Context) {
+// Propose generates a new gene from an island. It's a pure function.
+func Propose(island *Island) (Gene, Context) {
 	pop := island.Population
 	tournament := func() Individual {
 		best := pop[rand.Intn(len(pop))]
@@ -115,63 +146,17 @@ func Propose(island ProposeIn) (Query, Context) {
 		}
 	}
 
-	ctx := Context{
-		IslandID: island.ID,
-		Gene:     childGene,
-	}
-	return childGene, ctx
+	return childGene, Context{IslandID: island.ID, Gene: childGene}
 }
 
-// Observe evaluates a gene and returns its fitness.
-func Observe(gene Query) Evidence {
+// Observe evaluates a gene's fitness. It's a pure function.
+func Observe(gene Gene) Fitness {
 	a := 10.0
 	sum := a * float64(len(gene))
 	for _, x := range gene {
 		sum += x*x - a*math.Cos(2*math.Pi*x)
 	}
 	return Fitness(sum)
-}
-
-// --- State Manipulation Functions for Runner ---
-
-// Dispatch selects an available island and sends it to the proposal channel.
-func Dispatch(state *GaState, proposeCh chan<- ProposeIn) {
-	if len(state.AvailableIslandIDs) == 0 {
-		return
-	}
-	randIndex := rand.Intn(len(state.AvailableIslandIDs))
-	islandID := state.AvailableIslandIDs[randIndex]
-
-	state.AvailableIslandIDs = append(state.AvailableIslandIDs[:randIndex], state.AvailableIslandIDs[randIndex+1:]...)
-	state.PendingIslands[islandID] = true
-
-	proposeCh <- state.Islands[islandID]
-}
-
-// Propagate incorporates the evaluation result and handles migration.
-func Propagate(state *GaState, result bilevel.Result[Evidence, Context]) {
-	ctx := result.Ctx
-	islandID := ctx.IslandID
-	evaluatedChild := Individual{Gene: ctx.Gene, Fitness: result.Evidence}
-
-	// Update state
-	delete(state.PendingIslands, islandID)
-	state.EvaluationsCount++
-	state.AvailableIslandIDs = append(state.AvailableIslandIDs, islandID)
-
-	// Incorporate result
-	incorporate(state.Islands[islandID], []Individual{evaluatedChild})
-
-	// Handle migration
-	if state.EvaluationsCount%state.MigrationInterval == 0 && state.EvaluationsCount > 0 {
-		migrate(state.Islands, state.MigrationSize)
-	}
-}
-
-// ShouldTerminate checks if the evaluation limit has been reached.
-func ShouldTerminate(state *GaState) bool {
-	isEvaluationLimitReached := state.EvaluationsCount >= state.TotalEvaluations
-	return isEvaluationLimitReached
 }
 
 // --- Helper Functions ---
