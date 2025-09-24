@@ -31,7 +31,7 @@ func TestRastriginWithIslandV2Runner(t *testing.T) {
 	runnerConfig := bilevel.RunnerConfig{
 		Concurrency: concurrency,
 	}
-	runner := bilevel.NewRunner[*GaState](
+	run := bilevel.New[*GaState](
 		runnerConfig,
 		Propose,
 		Observe,
@@ -39,7 +39,7 @@ func TestRastriginWithIslandV2Runner(t *testing.T) {
 
 	// --- Execution ---
 	fmt.Println("--- Starting Rastrigin GA with redesigned island_v2 Runner ---")
-	runner.Run(
+	run(
 		initialState,
 		Dispatch,
 		Propagate,
