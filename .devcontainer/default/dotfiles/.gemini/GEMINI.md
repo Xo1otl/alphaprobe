@@ -1,33 +1,27 @@
 ## Project Overview
-
--   **Core Idea**: Automated discovery of interpretable models.
--   **Use Cases**: Algorithm/model discovery (physics, math, chemistry), research report generation.
--   **Methodology**: A 'propose-observe' cycle using Go CSP-based pipeline parallelism for I/O-bound stages. A control loop dispatches tasks and propagates results to the state.
--   **Keywords**: Parallel MCTS, Parallel GA, SR, Program Synthesis, Neuro-Symbolic AI, Quality Diversity, Open-Endedness, AlphaGo, Policy Network, Value Network, AlphaFold, Evoformer, Confidence Head, MoE, Test-Time Diffusion, Self-Play Reinforcement Learning, Emergent Abilities, Event Driven Architecutre (EDA).
+- **Goal**: Discover novel, interpretable algorithms/models in scientific domains (physics, math) and auto-generate research reports.
+- **Methodology**: A 'propose-observe' cycle using Go CSP-based pipeline parallelism for I/O-bound stages. A control loop dispatches tasks and propagates results to the state.
+- **Technical Keywords**: Parallel MCTS, Program Synthesis, Neuro-Symbolic AI, Quality Diversity, Open-Endedness, AlphaGo, Policy Network, Value Network, AlphaFold, Evoformer, Confidence Head, MoE, Test-Time Diffusion, Self-Play Reinforcement Learning, Emergent Abilities, Event Driven Architecutre (EDA).
 
 ## Development Conventions
+- Use the latest syntax (Python 3.13+, Go 1.25+, Bun).
+- Python `__init__` methods must be minimal; use factory functions for complex logic.
 
--   **Use Modern Syntax**: The project uses the latest versions of tools and languages (Python 3.13+, Go 1.25+, Bun). Always use the most current and idiomatic syntax and features available. For example, use modern generics syntax in Python (post-3.12 style without `TypeVar` where applicable).
--   **Python `__init__` Methods**: Keep `__init__` methods minimal. Complex initialization logic must be handled by factory functions (like Go).
+## When asked to "refine" (推敲) prompts:
+- Aggressively apply Occam's Razor to distill the core instruction.
 
-## Refinement Guideline (推敲)
+## When asked to "refine" (推敲) documents:
+1.  **Structure First:**
+    -   `導入`: Start with the problem/motivation.
+    -   `概要`: Describe the project's purpose and high-level architecture. Identify core components in **bold**.
+2.  **Flesh out Details:**
+    -   Create a separate, self-contained section for each bolded term from the `概要`.
+    -   All sections (`導入`, `概要`, and detail sections) must be at the same heading level.
+- General Rules: Use descriptive titles. Write in a formal, declarative style (「～だ」「～である」). Avoid meta-commentary.
 
-Apply these guidelines when explicitly asked to "refine" (推敲).
-
-### 1. For Prompts
--   Aggressively apply Occam's Razor. Eliminate redundancy and simplify phrasing to distill the core instruction.
-
-### 2. For Documents
--   **Generation Process:** Refine documents by following a generative, two-step process.
-    1.  **First, establish the structure:**
-        *   Write the **`導入`** section, starting with the concrete problem or motivation.
-        *   Write the **`概要`** section. This section's role is to describe the project's overall purpose and explain the high-level architecture or the relationships between the core functional parts.
-        *   When introducing these core parts for the first time in the `概要`, **identify them using bold text (`**`)**. Do not go into their specific details here. This effectively creates the document's skeleton.
-    2.  **Then, flesh out the details:**
-        *   For each term that was bolded in the `概要`, create a dedicated section with the bolded term as its heading.
-        *   These new sections must be at the **same heading level** as `導入` and `概要`, creating a flat structure.
-        *   The content within these detail sections should be self-contained.
--   **General Rules:**
-    *   Use explicit, descriptive titles for sections.
-    *   Write in a formal, declarative style (「～だ」「～である」調).
-    *   Avoid meta-commentary that describes the document's own structure.
+## When asked to write "返信文":
+-   **Persona**: student researcher (interning at QunaSys)
+-   **基本理念**: 人間はLLMとは異なり、長文と強い言葉が苦手である。常にシンプルでやわらかく、謙虚に。
+-   **生成形式**: 以下の2案を提示する。
+    1.  **メール**: 丁寧なビジネス文書。
+    2.  **チャット**: シンプルな、装飾なしの平文。
