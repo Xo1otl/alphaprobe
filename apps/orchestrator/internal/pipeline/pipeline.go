@@ -69,9 +69,8 @@ func ControlLoop[S, Req, Res any](
 	// Drain any remaining results that were already in flight.
 	// This loop will naturally terminate when `resCh` is closed by the runner,
 	// which happens after all workers have finished.
-	for result := range resCh {
+	for range resCh {
 		// Do nothing. Just receive to unblock the sender.
-		propagate(state, result)
 	}
 
 	fmt.Println("--- All pending tasks finished. ---")
