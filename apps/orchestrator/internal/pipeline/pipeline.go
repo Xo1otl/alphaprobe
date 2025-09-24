@@ -35,19 +35,46 @@ func ControlLoop[S, Req, Res any](
 	fmt.Println("--- Starting Event-Driven Control Loop ---")
 
 	// 1. Initial pipeline fill
-	dispatch(state, reqCh)
-
-	// 2. Event-driven loop
-	for result := range resCh {
-		propagate(state, result)
+	// Start by filling the pipeline with a number of tasks equal to the concurrency level.
+	// This ensures that all workers are busy from the beginning.
+	for i := 0; i < cap(reqCh); i++ {
 		if shouldTerminate(state) {
 			break
 		}
-		dispatch(state, reqCh) // Dispatch new tasks after processing a result
+		dispatch(state, reqCh)
 	}
 
-	// 3. Clean shutdown messaging
-	fmt.Println("\n--- All pending tasks finished. ---")
+	// 2. Main processing loop
+	// Continue processing results and dispatching new tasks as long as the termination
+	// condition is not met.
+	for !shouldTerminate(state) {
+		result, ok := <-resCh
+		if !ok {
+			// This can happen if the worker pools panic and the pipeline shuts down prematurely.
+			break
+		}
+		propagate(state, result)
+
+		// Check the termination condition again after propagation, before dispatching a new task.
+		if !shouldTerminate(state) {
+			dispatch(state, reqCh)
+		}
+	}
+
+	// 3. Graceful shutdown
+	fmt.Println("\n--- Termination condition met. Closing dispatch channel... ---")
+	close(reqCh) // Signal to the propose workers that no more tasks will be sent.
+
+	fmt.Println("--- Draining remaining results from the pipeline... ---")
+	// Drain any remaining results that were already in flight.
+	// This loop will naturally terminate when `resCh` is closed by the runner,
+	// which happens after all workers have finished.
+	for result := range resCh {
+		// Do nothing. Just receive to unblock the sender.
+		propagate(state, result)
+	}
+
+	fmt.Println("--- All pending tasks finished. ---")
 	fmt.Println("--- Control Loop Finished ---")
 }
 

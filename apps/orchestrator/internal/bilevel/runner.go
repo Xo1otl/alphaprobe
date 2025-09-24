@@ -142,8 +142,6 @@ func (r *simpleRunner[S, PIn, Q, C, E]) Run(
 	go func() { wgObserve.Wait(); close(resultCh) }()
 
 	pipeline.ControlLoop(dispatch, propagate, shouldTerminate, proposeCh, resultCh, state)
-
-	close(proposeCh)
 }
 
 // adaptedRunner handles the pipeline with a fan-in/fan-out adapter stage.
@@ -190,6 +188,4 @@ func (r *adaptedRunner[S, PIn, PRes, Q, C, E]) Run(
 	go func() { wgAdapter.Wait(); close(observeInCh) }()
 
 	pipeline.ControlLoop(dispatch, propagate, shouldTerminate, proposeInCh, resultCh, state)
-
-	close(proposeInCh)
 }

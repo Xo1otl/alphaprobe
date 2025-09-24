@@ -171,8 +171,7 @@ func Propagate(state *GaState, result bilevel.Result[Evidence, Context]) {
 // ShouldTerminate checks if the evaluation limit has been reached.
 func ShouldTerminate(state *GaState) bool {
 	isEvaluationLimitReached := state.EvaluationsCount >= state.TotalEvaluations
-	areAllTasksDone := len(state.PendingIslands) == 0
-	return isEvaluationLimitReached && areAllTasksDone
+	return isEvaluationLimitReached
 }
 
 // --- Helper Functions ---

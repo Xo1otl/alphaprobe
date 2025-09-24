@@ -12,7 +12,7 @@ func TestLLMSRWithBilevelRunner(t *testing.T) {
 	const (
 		maxEvaluations     = 100
 		proposeConcurrency = 4
-		observeConcurrency = 100
+		observeConcurrency = proposeConcurrency * 20
 	)
 
 	// --- State Initialization ---
@@ -23,7 +23,7 @@ func TestLLMSRWithBilevelRunner(t *testing.T) {
 	// No more workarounds are needed; the standard functions can be used directly.
 	runnerConfig := bilevel.RunnerConfig{
 		ProposeConcurrency: proposeConcurrency,
-		ObserveConcurrency: observeConcurrency * 4,
+		ObserveConcurrency: observeConcurrency,
 	}
 	run := NewLLMSR(runnerConfig)
 
