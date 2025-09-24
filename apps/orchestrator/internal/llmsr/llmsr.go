@@ -17,12 +17,12 @@ type Program struct {
 	Score    Score
 }
 
-type State = *LLMSRState               // S
-type ProposeIn = []Program             // PIn (List of parent programs)
-type ProposeResult = []ProgramSkeleton // PRes (Result from Propose stage: a batch of skeletons)
-type Query = ProgramSkeleton           // Q (Query for Observe stage: a single skeleton)
-type Context = LLMSRContext            // C
-type Evidence = Score                  // E
+type State = *LLMSRState      // S
+type ProposeIn = []Program    // PIn (List of parent programs)
+type ProposeOut = []ProgramSkeleton // PRes (Result from Propose stage: a batch of skeletons)
+type Query = ProgramSkeleton  // Q (Query for Observe stage: a single skeleton)
+type Context = LLMSRContext   // C
+type Evidence = Score         // E
 
 // --- Concrete Data Structures ---
 
@@ -77,7 +77,7 @@ func NewLLMSR(config bilevel.RunnerConfig) bilevel.RunnerFunc[State, ProposeIn, 
 // --- Mock Logic (Propose/Observe) & Adapter ---
 
 // proposeFn mocks the LLM call. It takes parent programs and returns a BATCH of new skeletons.
-func proposeFn(parents ProposeIn) (ProposeResult, Context) {
+func proposeFn(parents ProposeIn) (ProposeOut, Context) {
 	// In a real scenario, this would make a gRPC call to the Python worker.
 	// The worker would use the parent programs to construct a prompt for the LLM
 	// and request multiple completions (e.g., n=4).
@@ -102,14 +102,15 @@ func proposeFn(parents ProposeIn) (ProposeResult, Context) {
 // fanOutAdapter takes a batch of skeletons from the propose stage and sends them
 // individually to the observe stage.
 func fanOutAdapter(
-	in <-chan bilevel.ProposeOut[ProposeResult, Context],
+	in <-chan bilevel.ProposeOut[ProposeOut, Context],
 	out chan<- bilevel.ObserveIn[Query, Context],
 ) {
-	for proposeOut := range in {
-		for _, skeleton := range proposeOut.PRes {
+	defer close(out)
+	for proposeResult := range in {
+		for _, skeleton := range proposeResult.PRes {
 			// Create a new context for each individual skeleton to ensure
 			// the correct one is available in the propagate stage.
-			individualCtx := proposeOut.Ctx
+			individualCtx := proposeResult.Ctx
 			individualCtx.EvaluatedSkeleton = skeleton
 			out <- bilevel.ObserveIn[Query, Context]{
 				Query: skeleton,

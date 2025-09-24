@@ -10,12 +10,13 @@ import (
 func TestRastriginWithIslandV2Runner(t *testing.T) {
 	// --- Configuration ---
 	const (
-		islandPopulation  = 50
-		numIslands        = 5
-		totalEvaluations  = 250000
-		migrationInterval = 25
-		migrationSize     = 5
-		concurrency       = 8
+		islandPopulation   = 50
+		numIslands         = 5
+		totalEvaluations   = 250000
+		migrationInterval  = 25
+		migrationSize      = 5
+		proposeConcurrency = 8 // 処理速度の差により、たとえproposeとobserveが1:1対応していても、並列数を分けた方が良い場合がある。
+		observeConcurrency = 8
 	)
 
 	// --- State Initialization ---
@@ -29,7 +30,8 @@ func TestRastriginWithIslandV2Runner(t *testing.T) {
 
 	// --- Runner Setup ---
 	runnerConfig := bilevel.RunnerConfig{
-		Concurrency: concurrency,
+		ProposeConcurrency: proposeConcurrency,
+		ObserveConcurrency: observeConcurrency,
 	}
 	run := bilevel.New[*GaState](
 		runnerConfig,

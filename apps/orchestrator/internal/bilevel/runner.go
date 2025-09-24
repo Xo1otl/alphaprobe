@@ -10,7 +10,8 @@ import (
 
 // RunnerConfig holds the configuration for the runner.
 type RunnerConfig struct {
-	Concurrency int
+	ProposeConcurrency int
+	ObserveConcurrency  int
 }
 
 // Result is the final output of the observe stage, containing both the
@@ -118,9 +119,9 @@ func (r *simpleRunner[S, PIn, Q, C, E]) Run(
 	propagate func(state S, result Result[E, C]),
 	shouldTerminate func(state S) bool,
 ) {
-	proposeCh := make(chan PIn, r.config.Concurrency)
-	observeCh := make(chan ObserveIn[Q, C], r.config.Concurrency)
-	resultCh := make(chan Result[E, C], r.config.Concurrency)
+	proposeCh := make(chan PIn, r.config.ProposeConcurrency)
+	observeCh := make(chan ObserveIn[Q, C], r.config.ObserveConcurrency)
+	resultCh := make(chan Result[E, C], r.config.ObserveConcurrency)
 
 	var wgPropose, wgObserve sync.WaitGroup
 
@@ -134,8 +135,8 @@ func (r *simpleRunner[S, PIn, Q, C, E]) Run(
 		return Result[E, C]{Evidence: evidence, Ctx: obsIn.Ctx}
 	}
 
-	pipeline.WorkerPool(r.config.Concurrency, proposeTask, proposeCh, observeCh, &wgPropose)
-	pipeline.WorkerPool(r.config.Concurrency, observeTask, observeCh, resultCh, &wgObserve)
+	pipeline.WorkerPool(r.config.ProposeConcurrency, proposeTask, proposeCh, observeCh, &wgPropose)
+	pipeline.WorkerPool(r.config.ObserveConcurrency, observeTask, observeCh, resultCh, &wgObserve)
 
 	go func() { wgPropose.Wait(); close(observeCh) }()
 	go func() { wgObserve.Wait(); close(resultCh) }()
@@ -160,10 +161,10 @@ func (r *adaptedRunner[S, PIn, PRes, Q, C, E]) Run(
 	propagate func(state S, result Result[E, C]),
 	shouldTerminate func(state S) bool,
 ) {
-	proposeInCh := make(chan PIn, r.config.Concurrency)
-	proposeOutCh := make(chan ProposeOut[PRes, C], r.config.Concurrency)
-	observeInCh := make(chan ObserveIn[Q, C], r.config.Concurrency)
-	resultCh := make(chan Result[E, C], r.config.Concurrency)
+	proposeInCh := make(chan PIn, r.config.ProposeConcurrency)
+	proposeOutCh := make(chan ProposeOut[PRes, C], r.config.ProposeConcurrency)
+	observeInCh := make(chan ObserveIn[Q, C], r.config.ObserveConcurrency)
+	resultCh := make(chan Result[E, C], r.config.ObserveConcurrency)
 
 	var wgPropose, wgAdapter, wgObserve sync.WaitGroup
 
@@ -177,8 +178,8 @@ func (r *adaptedRunner[S, PIn, PRes, Q, C, E]) Run(
 		return Result[E, C]{Evidence: evidence, Ctx: obsIn.Ctx}
 	}
 
-	pipeline.WorkerPool(r.config.Concurrency, proposeTask, proposeInCh, proposeOutCh, &wgPropose)
-	pipeline.WorkerPool(r.config.Concurrency, observeTask, observeInCh, resultCh, &wgObserve)
+	pipeline.WorkerPool(r.config.ProposeConcurrency, proposeTask, proposeInCh, proposeOutCh, &wgPropose)
+	pipeline.WorkerPool(r.config.ObserveConcurrency, observeTask, observeInCh, resultCh, &wgObserve)
 
 	go func() { wgPropose.Wait(); close(proposeOutCh) }()
 	go func() { wgObserve.Wait(); close(resultCh) }()

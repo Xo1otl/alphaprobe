@@ -10,8 +10,9 @@ import (
 func TestLLMSRWithBilevelRunner(t *testing.T) {
 	// --- Configuration ---
 	const (
-		maxEvaluations = 100
-		concurrency    = 4
+		maxEvaluations     = 100
+		proposeConcurrency = 4
+		observeConcurrency = 100
 	)
 
 	// --- State Initialization ---
@@ -21,7 +22,8 @@ func TestLLMSRWithBilevelRunner(t *testing.T) {
 	// The new NewLLMSR factory encapsulates the creation of the runner with the fan-out adapter.
 	// No more workarounds are needed; the standard functions can be used directly.
 	runnerConfig := bilevel.RunnerConfig{
-		Concurrency: concurrency,
+		ProposeConcurrency: proposeConcurrency,
+		ObserveConcurrency: observeConcurrency * 4,
 	}
 	run := NewLLMSR(runnerConfig)
 
