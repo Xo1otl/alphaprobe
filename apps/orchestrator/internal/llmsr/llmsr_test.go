@@ -1,8 +1,10 @@
 package llmsr_test
 
 import (
+	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"alphaprobe/orchestrator/internal/bilevel"
 	"alphaprobe/orchestrator/internal/llmsr"
@@ -15,18 +17,22 @@ func TestLLMSRWithBilevelRunner(t *testing.T) {
 		proposeConcurrency = 100
 		observeConcurrency = 100 // A reasonable number for a mock test
 		maxQueueSize       = 10
+		testTimeout        = 5 * time.Second
 	)
 
-	// --- State Initialization ---
-	controller := llmsr.NewController("def initial_program(x): return x", maxEvaluations)
+	// --- Context and State Initialization ---
+	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+
+	state := llmsr.NewState("def initial_program(x): return x", maxEvaluations)
 
 	// --- Runner Setup ---
-	adapterFn := bilevel.NewFanOutAdapter(llmsr.FanOut)
+	adapter := bilevel.NewFanOutAdapter(llmsr.FanOut)
 
-	run := bilevel.NewWithAdapter(
-		controller.Update,
+	run := bilevel.RunWithAdapter(
+		state.Update,
 		llmsr.Propose,
-		adapterFn,
+		adapter,
 		llmsr.Observe,
 		proposeConcurrency,
 		observeConcurrency,
@@ -35,21 +41,21 @@ func TestLLMSRWithBilevelRunner(t *testing.T) {
 
 	// --- Execution ---
 	fmt.Println("--- Starting Mock LLMSR Search with adapted bilevel Runner ---")
-	initialTasks := controller.GetInitialTask()
-	run(initialTasks)
+	initialTasks := state.GetInitialTask()
+	run(ctx, initialTasks)
 	fmt.Println("--- Mock LLMSR Search Finished ---")
 
 	// --- Verification ---
-	fmt.Printf("Final best score: %f\n", controller.BestScore)
-	fmt.Printf("Total evaluations: %d\n", controller.EvaluationsCount)
+	fmt.Printf("Final best score: %f\n", state.BestScore)
+	fmt.Printf("Total evaluations: %d\n", state.EvaluationsCount)
 
-	if controller.EvaluationsCount < maxEvaluations {
-		t.Errorf("Expected at least %d evaluations, but got %d", maxEvaluations, controller.EvaluationsCount)
+	if state.EvaluationsCount < maxEvaluations {
+		t.Errorf("Expected at least %d evaluations, but got %d", maxEvaluations, state.EvaluationsCount)
 	}
-	if controller.BestScore > 1.0 { // Random scores are between 0 and 1
-		t.Errorf("Expected best score to be less than 1.0, but got %f", controller.BestScore)
+	if state.BestScore > 1.0 { // Random scores are between 0 and 1
+		t.Errorf("Expected best score to be less than 1.0, but got %f", state.BestScore)
 	}
-	if len(controller.Programs) > 10 {
-		t.Errorf("Expected population size to be at most 10, but got %d", len(controller.Programs))
+	if len(state.Programs) > 10 {
+		t.Errorf("Expected population size to be at most 10, but got %d", len(state.Programs))
 	}
 }

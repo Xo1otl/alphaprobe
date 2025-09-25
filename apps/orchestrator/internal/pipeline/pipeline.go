@@ -1,13 +1,44 @@
 package pipeline
 
 import (
+	"context"
 	"log"
 	"sync"
 )
 
-type UpdateFunc[Req, Res any] func(result Res) (newTasks []Req, done bool)
+type UpdateFunc[Req, Res any] func(ctx context.Context, result Res) (newTasks []Req, done bool)
 
-func ControlLoop[Req, Res any](
+func LaunchWorkers[Req, Res any](
+	ctx context.Context,
+	wg *sync.WaitGroup,
+	numWorkers int,
+	taskFn func(ctx context.Context, req Req) Res,
+	reqCh <-chan Req,
+	resCh chan<- Res,
+) {
+	for range numWorkers {
+		wg.Go(func() {
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case req, ok := <-reqCh:
+					if !ok {
+						return
+					}
+					select {
+					case <-ctx.Done():
+						return
+					case resCh <- taskFn(ctx, req):
+					}
+				}
+			}
+		})
+	}
+}
+
+func Loop[Req, Res any](
+	ctx context.Context,
 	update UpdateFunc[Req, Res],
 	initialTasks []Req,
 	reqCh chan<- Req,
@@ -33,12 +64,14 @@ Loop:
 		}
 
 		select {
+		case <-ctx.Done():
+			break Loop
 		case res, ok := <-recvCh:
 			if !ok {
 				break Loop
 			}
 
-			newTasks, done := update(res)
+			newTasks, done := update(ctx, res)
 			if done {
 				break Loop
 			}
@@ -49,21 +82,5 @@ Loop:
 			taskQueue = taskQueue[1:]
 		}
 	}
-	log.Println("[ControlLoop] END")
-}
-
-func WorkerPool[Req, Res any](
-	numWorkers int,
-	taskFn func(Req) Res,
-	reqCh <-chan Req,
-	resCh chan<- Res,
-	wg *sync.WaitGroup,
-) {
-	for range numWorkers {
-		wg.Go(func() {
-			for req := range reqCh {
-				resCh <- taskFn(req)
-			}
-		})
-	}
+	log.Println("[Pipeline.Loop] END")
 }

@@ -1,6 +1,7 @@
 package llmsr
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"sort"
@@ -16,8 +17,9 @@ type Program struct {
 
 // --- Concrete Data Structures ---
 
-// Controller holds the entire state and logic for the LLMSR algorithm.
-type Controller struct {
+// State holds the entire state and logic for the LLMSR algorithm.
+// It is a passive data structure managed by the pipeline controller.
+type State struct {
 	Programs         []Program
 	EvaluationsCount int
 	MaxEvaluations   int
@@ -25,21 +27,21 @@ type Controller struct {
 	PendingParents   map[string]bool // Tracks parents used for proposal.
 }
 
-// Context is the context object passed through the pipeline.
-type Context struct {
-	ParentSkeletons   []ProgramSkeleton
-	EvaluatedSkeleton ProgramSkeleton
+// Lineage is the metadata object passed through the pipeline.
+// It tracks the parent-child relationships between programs.
+type Lineage struct {
+	ParentSkeletons []ProgramSkeleton
 }
 
-// --- Controller Initialization ---
+// --- State Initialization ---
 
-// NewController initializes the state for the LLMSR search.
-func NewController(initialSkeleton ProgramSkeleton, maxEvaluations int) *Controller {
+// NewState initializes the state for the LLMSR search.
+func NewState(initialSkeleton ProgramSkeleton, maxEvaluations int) *State {
 	initialProgram := Program{
 		Skeleton: initialSkeleton,
 		Score:    1e9, // A very large number representing an unevaluated score.
 	}
-	return &Controller{
+	return &State{
 		Programs:         []Program{initialProgram},
 		EvaluationsCount: 0,
 		MaxEvaluations:   maxEvaluations,
@@ -51,14 +53,14 @@ func NewController(initialSkeleton ProgramSkeleton, maxEvaluations int) *Control
 // --- Core Update Logic ---
 
 // GetInitialTask bootstraps the search process by creating the first task.
-func (c *Controller) GetInitialTask() [][]Program {
+func (s *State) GetInitialTask() [][]Program {
 	// Handle the initial bootstrap case.
-	if len(c.Programs) != 1 || c.EvaluationsCount != 0 {
+	if len(s.Programs) != 1 || s.EvaluationsCount != 0 {
 		return nil // Should only be called at the start.
 	}
 
-	initialProgram := c.Programs[0]
-	c.PendingParents[initialProgram.Skeleton] = true
+	initialProgram := s.Programs[0]
+	s.PendingParents[initialProgram.Skeleton] = true
 	nextTask := []Program{initialProgram, initialProgram}
 	return [][]Program{nextTask}
 }
@@ -66,49 +68,49 @@ func (c *Controller) GetInitialTask() [][]Program {
 // Update is the central function that drives the LLMSR process. It incorporates results,
 // checks for termination, and dispatches new tasks.
 // Its signature matches bilevel.UpdateFunc.
-func (c *Controller) Update(skeleton ProgramSkeleton, score Score, ctx Context) ([][]Program, bool) {
+func (s *State) Update(ctx context.Context, skeleton ProgramSkeleton, score Score, lineage Lineage) ([][]Program, bool) {
 	// --- 1. Incorporate the result (Propagate logic) ---
-	c.EvaluationsCount++
+	s.EvaluationsCount++
 	newProgram := Program{
 		Skeleton: skeleton,
 		Score:    score,
 	}
-	c.Programs = append(c.Programs, newProgram)
+	s.Programs = append(s.Programs, newProgram)
 
 	// Keep population size fixed.
 	const maxPopulation = 10
-	if len(c.Programs) > maxPopulation {
-		sort.Slice(c.Programs, func(i, j int) bool {
-			return c.Programs[i].Score < c.Programs[j].Score // Best first
+	if len(s.Programs) > maxPopulation {
+		sort.Slice(s.Programs, func(i, j int) bool {
+			return s.Programs[i].Score < s.Programs[j].Score // Best first
 		})
-		c.Programs = c.Programs[:maxPopulation]
+		s.Programs = s.Programs[:maxPopulation]
 	}
 
-	if score < c.BestScore {
-		c.BestScore = score
-		fmt.Printf("New best score: %f (Evaluation #%d)\n", c.BestScore, c.EvaluationsCount)
+	if score < s.BestScore {
+		s.BestScore = score
+		fmt.Printf("New best score: %f (Evaluation #%d)\n", s.BestScore, s.EvaluationsCount)
 	}
 
 	// Release the parents from the pending state.
-	for _, p := range ctx.ParentSkeletons {
-		delete(c.PendingParents, p)
+	for _, p := range lineage.ParentSkeletons {
+		delete(s.PendingParents, p)
 	}
 
 	// --- 2. Check for termination (ShouldTerminate logic) ---
-	if c.EvaluationsCount >= c.MaxEvaluations {
+	if s.EvaluationsCount >= s.MaxEvaluations {
 		return nil, true // No new tasks, and terminate.
 	}
 
 	// --- 3. Prepare the next task (Dispatch logic) ---
 	// Only dispatch a new task if the previous proposal generation is fully complete.
-	if len(c.PendingParents) > 0 {
+	if len(s.PendingParents) > 0 {
 		return nil, false // Wait for other results from the same batch to be processed.
 	}
 
 	// Filter for available programs.
-	availablePrograms := make([]Program, 0, len(c.Programs))
-	for _, p := range c.Programs {
-		if !c.PendingParents[p.Skeleton] {
+	availablePrograms := make([]Program, 0, len(s.Programs))
+	for _, p := range s.Programs {
+		if !s.PendingParents[p.Skeleton] {
 			availablePrograms = append(availablePrograms, p)
 		}
 	}
@@ -124,8 +126,8 @@ func (c *Controller) Update(skeleton ProgramSkeleton, score Score, ctx Context) 
 	})
 	parent1 := availablePrograms[0]
 	parent2 := availablePrograms[1]
-	c.PendingParents[parent1.Skeleton] = true
-	c.PendingParents[parent2.Skeleton] = true
+	s.PendingParents[parent1.Skeleton] = true
+	s.PendingParents[parent2.Skeleton] = true
 
 	nextTask := []Program{parent1, parent2}
 	return [][]Program{nextTask}, false
@@ -134,7 +136,7 @@ func (c *Controller) Update(skeleton ProgramSkeleton, score Score, ctx Context) 
 // --- GA Logic (Propose/Observe) & Adapter ---
 
 // Propose mocks the LLM call. It takes parent programs and returns a BATCH of new skeletons.
-func Propose(parents []Program) ([]ProgramSkeleton, Context) {
+func Propose(ctx context.Context, parents []Program) ([]ProgramSkeleton, Lineage) {
 	batchSize := rand.Intn(4) + 1 // Generate 1 to 4 new skeletons
 	newSkeletons := make([]ProgramSkeleton, 0, batchSize)
 	for range batchSize {
@@ -147,15 +149,15 @@ func Propose(parents []Program) ([]ProgramSkeleton, Context) {
 		parentSkeletons[i] = p.Skeleton
 	}
 
-	ctx := Context{
+	lineage := Lineage{
 		ParentSkeletons: parentSkeletons,
 	}
-	return newSkeletons, ctx
+	return newSkeletons, lineage
 }
 
 // FanOut provides the core transformation for the adapter. It takes a batch of skeletons
 // and creates a separate query for each one.
-func FanOut(pout []ProgramSkeleton, ctx Context) []ProgramSkeleton {
+func FanOut(pout []ProgramSkeleton, data Lineage) []ProgramSkeleton {
 	// In this case, the queries are the skeletons themselves.
 	// We just need to ensure the context is correctly passed along.
 	// The bilevel.NewFanOutAdapter handles attaching the context to each query.
@@ -163,6 +165,7 @@ func FanOut(pout []ProgramSkeleton, ctx Context) []ProgramSkeleton {
 }
 
 // Observe mocks the optimizer and evaluation call. It takes a single skeleton and returns a score.
-func Observe(skeleton ProgramSkeleton) Score {
+func Observe(ctx context.Context, skeleton ProgramSkeleton) Score {
+	// In a real scenario, we might check ctx.Done() here if the evaluation is long.
 	return rand.Float64()
 }

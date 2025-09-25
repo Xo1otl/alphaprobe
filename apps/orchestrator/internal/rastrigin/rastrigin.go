@@ -1,6 +1,7 @@
 package rastrigin
 
 import (
+	"context"
 	"math"
 	"math/rand"
 	"sort"
@@ -19,19 +20,19 @@ type Individual struct {
 	Fitness Fitness
 }
 
-// Island repoutents a subpopulation.
+// Island represents a subpopulation.
 type Island struct {
 	ID         int
 	Population Population
 }
 
-// Context is the context object passed through the pipeline.
-type Context struct {
+// Metadata is the context object passed through the pipeline.
+type Metadata struct {
 	IslandID int
 }
 
-// Controller holds the entire state and logic for the genetic algorithm.
-type Controller struct {
+// State holds the entire state and logic for the genetic algorithm.
+type State struct {
 	Islands            []*Island
 	PendingIslands     map[int]bool
 	AvailableIslandIDs []int
@@ -41,14 +42,14 @@ type Controller struct {
 	MigrationSize      int
 }
 
-// NewController initializes the state for the GA.
-func NewController(
+// NewState initializes the state for the GA.
+func NewState(
 	islandPopulation int,
 	numIslands int,
 	totalEvaluations int,
 	migrationInterval int,
 	migrationSize int,
-) *Controller {
+) *State {
 	islands := make([]*Island, numIslands)
 	for i := range numIslands {
 		islands[i] = &Island{ID: i, Population: newInitialPopulation(islandPopulation)}
@@ -59,7 +60,7 @@ func NewController(
 		availableIDs[i] = island.ID
 	}
 
-	return &Controller{
+	return &State{
 		Islands:            islands,
 		PendingIslands:     make(map[int]bool),
 		AvailableIslandIDs: availableIDs,
@@ -71,11 +72,11 @@ func NewController(
 }
 
 // Update is the core logic function. It's decoupled from the runner's internal types.
-func (s *Controller) Update(gene Gene, fitness Fitness, ctx Context) ([]*Island, bool) {
+func (s *State) Update(ctx context.Context, gene Gene, fitness Fitness, metadata Metadata) ([]*Island, bool) {
 	// --- 1. Incorporate the result from the last completed task (Propagate logic) ---
 	// On the first call, gene will be nil.
 	if gene != nil {
-		islandID := ctx.IslandID
+		islandID := metadata.IslandID
 		evaluatedChild := Individual{Gene: gene, Fitness: fitness}
 
 		delete(s.PendingIslands, islandID)
@@ -112,7 +113,7 @@ func (s *Controller) Update(gene Gene, fitness Fitness, ctx Context) ([]*Island,
 // --- GA Logic (Propose/Observe) ---
 
 // Propose generates a new gene from an island. It's a pure function.
-func Propose(island *Island) (Gene, Context) {
+func Propose(ctx context.Context, island *Island) (Gene, Metadata) {
 	pop := island.Population
 	tournament := func() Individual {
 		best := pop[rand.Intn(len(pop))]
@@ -141,11 +142,11 @@ func Propose(island *Island) (Gene, Context) {
 		}
 	}
 
-	return childGene, Context{IslandID: island.ID}
+	return childGene, Metadata{IslandID: island.ID}
 }
 
 // Observe evaluates a gene's fitness. It's a pure function.
-func Observe(gene Gene) Fitness {
+func Observe(ctx context.Context, gene Gene) Fitness {
 	a := 10.0
 	sum := a * float64(len(gene))
 	for _, x := range gene {
@@ -163,7 +164,7 @@ func newInitialPopulation(size int) Population {
 		for j := range gene {
 			gene[j] = -5.12 + rand.Float64()*(5.12-(-5.12))
 		}
-		pop[i] = Individual{Gene: gene, Fitness: Observe(gene)}
+		pop[i] = Individual{Gene: gene, Fitness: Observe(context.Background(), gene)}
 	}
 	return pop
 }
