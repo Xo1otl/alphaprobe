@@ -28,7 +28,6 @@ type Island struct {
 // Context is the context object passed through the pipeline.
 type Context struct {
 	IslandID int
-	Gene     Gene
 }
 
 // Controller holds the entire state and logic for the genetic algorithm.
@@ -72,12 +71,12 @@ func NewController(
 }
 
 // Update is the core logic function. It's decoupled from the runner's internal types.
-func (s *Controller) Update(fitness Fitness, ctx Context) ([]*Island, bool) {
+func (s *Controller) Update(gene Gene, fitness Fitness, ctx Context) ([]*Island, bool) {
 	// --- 1. Incorporate the result from the last completed task (Propagate logic) ---
-	// On the first call, ctx will be a zero-value struct, so Ctx.Gene will be nil.
-	if ctx.Gene != nil {
+	// On the first call, gene will be nil.
+	if gene != nil {
 		islandID := ctx.IslandID
-		evaluatedChild := Individual{Gene: ctx.Gene, Fitness: fitness}
+		evaluatedChild := Individual{Gene: gene, Fitness: fitness}
 
 		delete(s.PendingIslands, islandID)
 		s.EvaluationsCount++
@@ -142,7 +141,7 @@ func Propose(island *Island) (Gene, Context) {
 		}
 	}
 
-	return childGene, Context{IslandID: island.ID, Gene: childGene}
+	return childGene, Context{IslandID: island.ID}
 }
 
 // Observe evaluates a gene's fitness. It's a pure function.

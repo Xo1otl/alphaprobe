@@ -1,6 +1,7 @@
 package bilevel
 
 import (
+	"log"
 	"sync"
 
 	"alphaprobe/orchestrator/internal/pipeline"
@@ -13,7 +14,7 @@ type RunnerConfig struct {
 	ObserveConcurrency int
 }
 type RunnerFunc[PReq any] func(initialTasks []PReq)
-type UpdateFunc[E, C, PReq any] func(evidence E, ctx C) (newTasks []PReq, done bool)
+type UpdateFunc[Q, E, C, PReq any] func(query Q, evidence E, ctx C) (newTasks []PReq, done bool)
 type ProposeFunc[PReq any, POut any, C any] func(proposeReq PReq) (pout POut, ctx C)
 type ObserveFunc[Q any, E any] func(query Q) (evidence E)
 type AdapterFunc[POut any, Q any, C any] func(in <-chan proposeRes[POut, C], out chan<- *observeReq[Q, C])
@@ -31,7 +32,8 @@ type observeReq[Q any, C any] struct {
 	Ctx   C
 }
 
-type observeRes[E any, C any] struct {
+type observeRes[Q, E, C any] struct {
+	Query    Q
 	Evidence E
 	Ctx      C
 }
@@ -56,7 +58,7 @@ func NewFanOutAdapter[POut any, Q any, C any](
 }
 
 func New[PReq, Q, C, E any](
-	updateFn UpdateFunc[E, C, PReq],
+	updateFn UpdateFunc[Q, E, C, PReq],
 	proposeFn ProposeFunc[PReq, Q, C],
 	observeFn ObserveFunc[Q, E],
 	proposeConcurrency int,
@@ -75,7 +77,7 @@ func New[PReq, Q, C, E any](
 }
 
 func NewWithAdapter[PReq, POut, Q, C, E any](
-	updateFn UpdateFunc[E, C, PReq],
+	updateFn UpdateFunc[Q, E, C, PReq],
 	proposeFn ProposeFunc[PReq, POut, C],
 	adapterFn AdapterFunc[POut, Q, C],
 	observeFn ObserveFunc[Q, E],
@@ -98,7 +100,7 @@ func NewWithAdapter[PReq, POut, Q, C, E any](
 // --- Private Runner Implementations ---
 
 type simpleRunner[PReq, Q, C, E any] struct {
-	updateFn           UpdateFunc[E, C, PReq]
+	updateFn           UpdateFunc[Q, E, C, PReq]
 	proposeFn          ProposeFunc[PReq, Q, C]
 	observeFn          ObserveFunc[Q, E]
 	proposeConcurrency int
@@ -109,7 +111,7 @@ type simpleRunner[PReq, Q, C, E any] struct {
 func (r *simpleRunner[PReq, Q, C, E]) Run(initialTasks []PReq) {
 	proposeReqCh := make(chan PReq, r.proposeConcurrency)
 	observeReqCh := make(chan *observeReq[Q, C], r.observeConcurrency)
-	observeResCh := make(chan *observeRes[E, C], r.observeConcurrency)
+	observeResCh := make(chan *observeRes[Q, E, C], r.observeConcurrency)
 
 	var wgPropose, wgObserve sync.WaitGroup
 
@@ -118,9 +120,9 @@ func (r *simpleRunner[PReq, Q, C, E]) Run(initialTasks []PReq) {
 		return &observeReq[Q, C]{Query: q, Ctx: ctx}
 	}
 
-	observeTask := func(obsIn *observeReq[Q, C]) *observeRes[E, C] {
+	observeTask := func(obsIn *observeReq[Q, C]) *observeRes[Q, E, C] {
 		evidence := r.observeFn(obsIn.Query)
-		return &observeRes[E, C]{Evidence: evidence, Ctx: obsIn.Ctx}
+		return &observeRes[Q, E, C]{Query: obsIn.Query, Evidence: evidence, Ctx: obsIn.Ctx}
 	}
 
 	pipeline.WorkerPool(r.proposeConcurrency, proposeTask, proposeReqCh, observeReqCh, &wgPropose)
@@ -129,15 +131,15 @@ func (r *simpleRunner[PReq, Q, C, E]) Run(initialTasks []PReq) {
 	go func() { wgPropose.Wait(); close(observeReqCh) }()
 	go func() { wgObserve.Wait(); close(observeResCh) }()
 
-	update := func(res *observeRes[E, C]) ([]PReq, bool) {
-		return r.updateFn(res.Evidence, res.Ctx)
+	update := func(res *observeRes[Q, E, C]) ([]PReq, bool) {
+		return r.updateFn(res.Query, res.Evidence, res.Ctx)
 	}
 
 	pipeline.ControlLoop(update, initialTasks, proposeReqCh, observeResCh, r.maxQueueSize)
 }
 
 type adaptedRunner[PReq, POut, Q, C, E any] struct {
-	updateFn           UpdateFunc[E, C, PReq]
+	updateFn           UpdateFunc[Q, E, C, PReq]
 	proposeFn          ProposeFunc[PReq, POut, C]
 	adapterFn          AdapterFunc[POut, Q, C]
 	observeFn          ObserveFunc[Q, E]
@@ -150,7 +152,7 @@ func (r *adaptedRunner[PReq, POut, Q, C, E]) Run(initialTasks []PReq) {
 	proposeReqCh := make(chan PReq, r.proposeConcurrency)
 	proposeResCh := make(chan proposeRes[POut, C], r.proposeConcurrency)
 	observeReqCh := make(chan *observeReq[Q, C], r.observeConcurrency)
-	observeResCh := make(chan *observeRes[E, C], r.observeConcurrency)
+	observeResCh := make(chan *observeRes[Q, E, C], r.observeConcurrency)
 
 	var wgPropose, wgObserve sync.WaitGroup
 
@@ -159,21 +161,29 @@ func (r *adaptedRunner[PReq, POut, Q, C, E]) Run(initialTasks []PReq) {
 		return proposeRes[POut, C]{POut: pout, Ctx: ctx}
 	}
 
-	observeTask := func(obsReq *observeReq[Q, C]) *observeRes[E, C] {
+	observeTask := func(obsReq *observeReq[Q, C]) *observeRes[Q, E, C] {
 		evidence := r.observeFn(obsReq.Query)
-		return &observeRes[E, C]{Evidence: evidence, Ctx: obsReq.Ctx}
+		return &observeRes[Q, E, C]{Query: obsReq.Query, Evidence: evidence, Ctx: obsReq.Ctx}
 	}
 
 	pipeline.WorkerPool(r.proposeConcurrency, proposeTask, proposeReqCh, proposeResCh, &wgPropose)
 	pipeline.WorkerPool(r.observeConcurrency, observeTask, observeReqCh, observeResCh, &wgObserve)
 
-	go func() { wgPropose.Wait(); close(proposeResCh) }()
-	go func() { wgObserve.Wait(); close(observeResCh) }()
+	go func() {
+		wgPropose.Wait()
+		log.Println("[Runner] Proposers finished, closing proposeResCh")
+		close(proposeResCh)
+	}()
+	go func() {
+		wgObserve.Wait()
+		log.Println("[Runner] Observers finished, closing observeResCh")
+		close(observeResCh)
+	}()
 
 	go r.adapterFn(proposeResCh, observeReqCh)
 
-	update := func(res *observeRes[E, C]) ([]PReq, bool) {
-		return r.updateFn(res.Evidence, res.Ctx)
+	update := func(res *observeRes[Q, E, C]) ([]PReq, bool) {
+		return r.updateFn(res.Query, res.Evidence, res.Ctx)
 	}
 
 	pipeline.ControlLoop(update, initialTasks, proposeReqCh, observeResCh, r.maxQueueSize)

@@ -11,10 +11,10 @@ import (
 func TestLLMSRWithBilevelRunner(t *testing.T) {
 	// --- Configuration ---
 	const (
-		maxEvaluations     = 5
+		maxEvaluations     = 1000
 		proposeConcurrency = 10
 		observeConcurrency = 100 // A reasonable number for a mock test
-		maxQueueSize       = 1
+		maxQueueSize       = 1000
 	)
 
 	// --- State Initialization ---
@@ -35,7 +35,7 @@ func TestLLMSRWithBilevelRunner(t *testing.T) {
 
 	// --- Execution ---
 	fmt.Println("--- Starting Mock LLMSR Search with adapted bilevel Runner ---")
-	initialTasks, _ := controller.Update(0, llmsr.Context{})
+	initialTasks := controller.GetInitialTask()
 	run(initialTasks)
 	fmt.Println("--- Mock LLMSR Search Finished ---")
 

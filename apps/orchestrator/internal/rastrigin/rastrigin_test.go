@@ -43,7 +43,7 @@ func TestRastriginWithRunner(t *testing.T) {
 	// --- Execution ---
 	fmt.Println("--- Starting Rastrigin GA with Runner ---")
 	// The runner is started with initial tasks, which we get from a zero-value call to Update.
-	initialTasks, _ := controller.Update(0, rastrigin.Context{})
+	initialTasks, _ := controller.Update(nil, 0, rastrigin.Context{})
 	run(initialTasks)
 	fmt.Println("--- Rastrigin GA Finished ---")
 

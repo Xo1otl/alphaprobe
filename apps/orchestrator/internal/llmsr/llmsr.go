@@ -50,36 +50,48 @@ func NewController(initialSkeleton ProgramSkeleton, maxEvaluations int) *Control
 
 // --- Core Update Logic ---
 
+// GetInitialTask bootstraps the search process by creating the first task.
+func (c *Controller) GetInitialTask() [][]Program {
+	// Handle the initial bootstrap case.
+	if len(c.Programs) != 1 || c.EvaluationsCount != 0 {
+		return nil // Should only be called at the start.
+	}
+
+	initialProgram := c.Programs[0]
+	c.PendingParents[initialProgram.Skeleton] = true
+	nextTask := []Program{initialProgram, initialProgram}
+	return [][]Program{nextTask}
+}
+
 // Update is the central function that drives the LLMSR process. It incorporates results,
 // checks for termination, and dispatches new tasks.
-func (c *Controller) Update(score Score, ctx Context) ([][]Program, bool) {
+// Its signature matches bilevel.UpdateFunc.
+func (c *Controller) Update(skeleton ProgramSkeleton, score Score, ctx Context) ([][]Program, bool) {
 	// --- 1. Incorporate the result (Propagate logic) ---
-	if ctx.EvaluatedSkeleton != "" {
-		c.EvaluationsCount++
-		newProgram := Program{
-			Skeleton: ctx.EvaluatedSkeleton,
-			Score:    score,
-		}
-		c.Programs = append(c.Programs, newProgram)
+	c.EvaluationsCount++
+	newProgram := Program{
+		Skeleton: skeleton,
+		Score:    score,
+	}
+	c.Programs = append(c.Programs, newProgram)
 
-		// Keep population size fixed.
-		const maxPopulation = 10
-		if len(c.Programs) > maxPopulation {
-			sort.Slice(c.Programs, func(i, j int) bool {
-				return c.Programs[i].Score < c.Programs[j].Score // Best first
-			})
-			c.Programs = c.Programs[:maxPopulation]
-		}
+	// Keep population size fixed.
+	const maxPopulation = 10
+	if len(c.Programs) > maxPopulation {
+		sort.Slice(c.Programs, func(i, j int) bool {
+			return c.Programs[i].Score < c.Programs[j].Score // Best first
+		})
+		c.Programs = c.Programs[:maxPopulation]
+	}
 
-		if score < c.BestScore {
-			c.BestScore = score
-			fmt.Printf("New best score: %f (Evaluation #%d)\n", c.BestScore, c.EvaluationsCount)
-		}
+	if score < c.BestScore {
+		c.BestScore = score
+		fmt.Printf("New best score: %f (Evaluation #%d)\n", c.BestScore, c.EvaluationsCount)
+	}
 
-		// Release the parents from the pending state.
-		for _, p := range ctx.ParentSkeletons {
-			delete(c.PendingParents, p)
-		}
+	// Release the parents from the pending state.
+	for _, p := range ctx.ParentSkeletons {
+		delete(c.PendingParents, p)
 	}
 
 	// --- 2. Check for termination (ShouldTerminate logic) ---
@@ -88,18 +100,12 @@ func (c *Controller) Update(score Score, ctx Context) ([][]Program, bool) {
 	}
 
 	// --- 3. Prepare the next task (Dispatch logic) ---
-	// Handle the initial bootstrap case where only one program exists.
-	if len(c.Programs) == 1 && c.EvaluationsCount == 0 {
-		initialProgram := c.Programs[0]
-		if !c.PendingParents[initialProgram.Skeleton] {
-			// Use the same program for both parents to kick things off.
-			c.PendingParents[initialProgram.Skeleton] = true
-			nextTask := []Program{initialProgram, initialProgram}
-			return [][]Program{nextTask}, false
-		}
+	// Only dispatch a new task if the previous proposal generation is fully complete.
+	if len(c.PendingParents) > 0 {
+		return nil, false // Wait for other results from the same batch to be processed.
 	}
 
-	// Filter for programs that are not currently being used as parents.
+	// Filter for available programs.
 	availablePrograms := make([]Program, 0, len(c.Programs))
 	for _, p := range c.Programs {
 		if !c.PendingParents[p.Skeleton] {
@@ -107,20 +113,17 @@ func (c *Controller) Update(score Score, ctx Context) ([][]Program, bool) {
 		}
 	}
 
-	// If there aren't enough available parents to form a new task, do nothing.
-	// This prevents a deadlock when all programs are pending.
+	// If not enough parents are available, the search space is exhausted.
 	if len(availablePrograms) < 2 {
-		return nil, false
+		return nil, true
 	}
 
-	// Shuffle the available programs to select two distinct parents randomly.
+	// Shuffle and select two distinct parents.
 	rand.Shuffle(len(availablePrograms), func(i, j int) {
 		availablePrograms[i], availablePrograms[j] = availablePrograms[j], availablePrograms[i]
 	})
-
 	parent1 := availablePrograms[0]
 	parent2 := availablePrograms[1]
-
 	c.PendingParents[parent1.Skeleton] = true
 	c.PendingParents[parent2.Skeleton] = true
 
