@@ -11,7 +11,6 @@ import (
 )
 
 func TestRastriginWithRunner(t *testing.T) {
-	// --- Configuration ---
 	const (
 		islandPopulation   = 50
 		numIslands         = 5
@@ -21,10 +20,9 @@ func TestRastriginWithRunner(t *testing.T) {
 		proposeConcurrency = 5
 		observeConcurrency = 5
 		maxQueueSize       = 1000
-		testTimeout        = 10 * time.Second // Add a timeout for safety
+		testTimeout        = 10 * time.Second
 	)
 
-	// --- Context and State Initialization ---
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
 
@@ -36,7 +34,6 @@ func TestRastriginWithRunner(t *testing.T) {
 		migrationSize,
 	)
 
-	// --- Runner Setup ---
 	run := bilevel.Run(
 		state.Update,
 		rastrigin.Propose,
@@ -46,15 +43,12 @@ func TestRastriginWithRunner(t *testing.T) {
 		maxQueueSize,
 	)
 
-	// --- Execution ---
 	fmt.Println("--- Starting Rastrigin GA with Runner ---")
-	// The runner is started with initial tasks, which we get from a zero-value call to Update.
 	initialTasks, _ := state.Update(ctx, nil, 0, rastrigin.Metadata{})
 	run(ctx, initialTasks)
 	fmt.Println("--- Rastrigin GA Finished ---")
 
-	// --- Verification ---
-	var bestFitness rastrigin.Fitness = 1e6 // A very large number
+	var bestFitness rastrigin.Fitness = 1e6
 	for _, island := range state.Islands {
 		for _, individual := range island.Population {
 			if individual.Fitness < bestFitness {
@@ -69,7 +63,7 @@ func TestRastriginWithRunner(t *testing.T) {
 	if state.EvaluationsCount < totalEvaluations {
 		t.Errorf("Expected at least %d evaluations, but got %d", totalEvaluations, state.EvaluationsCount)
 	}
-	if bestFitness > 0.001 { // Rastrigin's global minimum is 0. Expecting a value close to it.
+	if bestFitness > 0.001 {
 		t.Errorf("Expected best fitness to be less than 0.001, but got %f", bestFitness)
 	}
 }

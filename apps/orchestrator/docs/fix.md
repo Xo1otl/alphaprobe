@@ -54,8 +54,8 @@ import (
 ## structure
 * pipeline.go: 汎用的な非同期パイプラインを構築するための`ControlLoop`と`WorkerPool`を提供。
 * runner.go: `pipeline`を使い、Propose/Observeモデルの具体的な実行エンジンを構築。
-* llmsr.go/rastrigin.go: `runner`のロジックを実装したLLMSRアルゴリズムのコアロジック。
-* llmsr_test.go/rastrigin_test.go: `llmsr`と`runner`を結合した統合テスト。
+* llmsr.go: `runner`のロジックを実装したLLMSRアルゴリズムのコアロジック。
+* llmsr_test.go: `llmsr`と`runner`を結合した統合テスト。
 
 ## Idea
 * propose/observeは時間のかかる処理を想定している、context.Contextをpipelineやrunnerをはじめとした中心的なコンポーネントを含めてすべてが引き回す必要あるか？それとも参照を工夫すればpipelineまで変更せずに対応できるのか？

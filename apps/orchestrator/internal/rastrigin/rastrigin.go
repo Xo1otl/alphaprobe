@@ -7,31 +7,24 @@ import (
 	"sort"
 )
 
-// --- Type Aliases for Clarity ---
 type Gene = []float64
 type Fitness = float64
 type Population = []Individual
 
-// --- Concrete Data Structures ---
-
-// Individual holds the genetic information and fitness of a single entity.
 type Individual struct {
 	Gene    Gene
 	Fitness Fitness
 }
 
-// Island represents a subpopulation.
 type Island struct {
 	ID         int
 	Population Population
 }
 
-// Metadata is the context object passed through the pipeline.
 type Metadata struct {
 	IslandID int
 }
 
-// State holds the entire state and logic for the genetic algorithm.
 type State struct {
 	Islands            []*Island
 	PendingIslands     map[int]bool
@@ -42,7 +35,6 @@ type State struct {
 	MigrationSize      int
 }
 
-// NewState initializes the state for the GA.
 func NewState(
 	islandPopulation int,
 	numIslands int,
@@ -71,10 +63,7 @@ func NewState(
 	}
 }
 
-// Update is the core logic function. It's decoupled from the runner's internal types.
 func (s *State) Update(ctx context.Context, gene Gene, fitness Fitness, metadata Metadata) ([]*Island, bool) {
-	// --- 1. Incorporate the result from the last completed task (Propagate logic) ---
-	// On the first call, gene will be nil.
 	if gene != nil {
 		islandID := metadata.IslandID
 		evaluatedChild := Individual{Gene: gene, Fitness: fitness}
@@ -90,14 +79,12 @@ func (s *State) Update(ctx context.Context, gene Gene, fitness Fitness, metadata
 		}
 	}
 
-	// --- 2. Check for termination condition (ShouldTerminate logic) ---
 	if s.EvaluationsCount >= s.TotalEvaluations {
-		return nil, true // No new tasks, and terminate.
+		return nil, true
 	}
 
-	// --- 3. Prepare the next task(s) to be dispatched (Dispatch logic) ---
 	if len(s.AvailableIslandIDs) == 0 {
-		return nil, false // No tasks to dispatch right now, but don't terminate.
+		return nil, false
 	}
 
 	randIndex := rand.Intn(len(s.AvailableIslandIDs))
@@ -107,12 +94,9 @@ func (s *State) Update(ctx context.Context, gene Gene, fitness Fitness, metadata
 	s.PendingIslands[islandID] = true
 
 	nextTask := s.Islands[islandID]
-	return []*Island{nextTask}, false // Dispatch one task, and continue.
+	return []*Island{nextTask}, false
 }
 
-// --- GA Logic (Propose/Observe) ---
-
-// Propose generates a new gene from an island. It's a pure function.
 func Propose(ctx context.Context, island *Island) (Gene, Metadata) {
 	pop := island.Population
 	tournament := func() Individual {
@@ -128,16 +112,16 @@ func Propose(ctx context.Context, island *Island) (Gene, Metadata) {
 	parent1, parent2 := tournament(), tournament()
 
 	var childGene Gene
-	if rand.Float64() < 0.9 { // CrossoverRate
+	if rand.Float64() < 0.9 {
 		childGene = crossoverBLXAlpha(parent1.Gene, parent2.Gene, 0.5)
 	} else {
-		childGene = make(Gene, 30) // NumDimensions
+		childGene = make(Gene, 30)
 		copy(childGene, parent1.Gene)
 	}
 
 	for i := range childGene {
-		if rand.Float64() < 1.0/30.0 { // MutationRate
-			childGene[i] += rand.NormFloat64() * ((5.12 - (-5.12)) * 0.05) // StdDev
+		if rand.Float64() < 1.0/30.0 {
+			childGene[i] += rand.NormFloat64() * ((5.12 - (-5.12)) * 0.05)
 			childGene[i] = math.Max(-5.12, math.Min(5.12, childGene[i]))
 		}
 	}
@@ -145,7 +129,6 @@ func Propose(ctx context.Context, island *Island) (Gene, Metadata) {
 	return childGene, Metadata{IslandID: island.ID}
 }
 
-// Observe evaluates a gene's fitness. It's a pure function.
 func Observe(ctx context.Context, gene Gene) Fitness {
 	a := 10.0
 	sum := a * float64(len(gene))
@@ -154,8 +137,6 @@ func Observe(ctx context.Context, gene Gene) Fitness {
 	}
 	return Fitness(sum)
 }
-
-// --- Helper Functions ---
 
 func newInitialPopulation(size int) Population {
 	pop := make(Population, size)
@@ -182,7 +163,7 @@ func crossoverBLXAlpha(p1, p2 Gene, alpha float64) Gene {
 
 func incorporate(island *Island, individuals []Individual) {
 	sort.Slice(island.Population, func(a, b int) bool {
-		return island.Population[a].Fitness > island.Population[b].Fitness // Worst first
+		return island.Population[a].Fitness > island.Population[b].Fitness
 	})
 	for j := 0; j < len(individuals) && j < len(island.Population); j++ {
 		if individuals[j].Fitness < island.Population[j].Fitness {
@@ -198,7 +179,7 @@ func migrate(islands []*Island, migrationSize int) {
 	allMigrants := make([][]Individual, len(islands))
 	for i, island := range islands {
 		sort.Slice(island.Population, func(a, b int) bool {
-			return island.Population[a].Fitness < island.Population[b].Fitness // Best first
+			return island.Population[a].Fitness < island.Population[b].Fitness
 		})
 		count := min(migrationSize, len(island.Population))
 		allMigrants[i] = island.Population[:count]
