@@ -14,7 +14,7 @@ type RunnerConfig struct {
 }
 type RunnerFunc[PReq any] func(initialTasks []PReq)
 type UpdateFunc[Q, E, C, PReq any] func(query Q, evidence E, ctx C) (newTasks []PReq, done bool)
-type ProposeFunc[PReq any, POut any, C any] func(proposeReq PReq) (pout POut, ctx C)
+type ProposeFunc[PReq any, POut any, C any] func(preq PReq) (pout POut, ctx C)
 type ObserveFunc[Q any, E any] func(query Q) (evidence E)
 type AdapterFunc[POut any, Q any, C any] func(in <-chan proposeRes[POut, C], out chan<- *observeReq[Q, C])
 type FanOutFunc[POut any, Q any, C any] func(pout POut, ctx C) []Q
