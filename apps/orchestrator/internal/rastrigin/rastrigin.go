@@ -4,8 +4,6 @@ import (
 	"math"
 	"math/rand"
 	"sort"
-
-	"alphaprobe/orchestrator/internal/bilevel"
 )
 
 // --- Type Aliases for Clarity ---
@@ -73,14 +71,13 @@ func NewController(
 	}
 }
 
-// Update is the core logic function that conforms to the runner's expected signature.
-// It incorporates results and dispatches new tasks.
-func (s *Controller) Update(result *bilevel.ObserveRes[Fitness, Context]) ([]*Island, bool) {
+// Update is the core logic function. It's decoupled from the runner's internal types.
+func (s *Controller) Update(fitness Fitness, ctx Context) ([]*Island, bool) {
 	// --- 1. Incorporate the result from the last completed task (Propagate logic) ---
-	if result != nil {
-		ctx := result.Ctx
+	// On the first call, ctx will be a zero-value struct, so Ctx.Gene will be nil.
+	if ctx.Gene != nil {
 		islandID := ctx.IslandID
-		evaluatedChild := Individual{Gene: ctx.Gene, Fitness: result.Evidence}
+		evaluatedChild := Individual{Gene: ctx.Gene, Fitness: fitness}
 
 		delete(s.PendingIslands, islandID)
 		s.EvaluationsCount++
@@ -99,7 +96,6 @@ func (s *Controller) Update(result *bilevel.ObserveRes[Fitness, Context]) ([]*Is
 	}
 
 	// --- 3. Prepare the next task(s) to be dispatched (Dispatch logic) ---
-	// In this simple GA, we dispatch one task for each result received (or for the initial call).
 	if len(s.AvailableIslandIDs) == 0 {
 		return nil, false // No tasks to dispatch right now, but don't terminate.
 	}

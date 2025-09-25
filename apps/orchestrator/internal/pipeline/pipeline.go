@@ -1,14 +1,58 @@
-// FIXME: nilチャンネルとselectを使い、dispatchを削除、newTasks, done := update(result)に変更
-// FIXME: 1:Nファンアウトに対応するために大幅な修正が必要
 package pipeline
 
 import (
-	"fmt"
+	"log"
 	"sync"
 )
 
-// WorkerPool starts a number of workers to process tasks from a request channel
-// and send results to a response channel.
+type UpdateFunc[Req, Res any] func(result Res) (newTasks []Req, done bool)
+
+func ControlLoop[Req, Res any](
+	update UpdateFunc[Req, Res],
+	initialTasks []Req,
+	reqCh chan<- Req,
+	resCh <-chan Res,
+	maxQueueSize int,
+) {
+	taskQueue := make([]Req, 0, maxQueueSize)
+	taskQueue = append(taskQueue, initialTasks...)
+
+Loop:
+	for {
+		var sendCh chan<- Req
+		var nextTask Req
+		if len(taskQueue) > 0 {
+			sendCh = reqCh
+			nextTask = taskQueue[0]
+		}
+
+		var recvCh <-chan Res
+		if len(taskQueue) < maxQueueSize {
+			recvCh = resCh
+		}
+
+		select {
+		case res, ok := <-recvCh:
+			if !ok {
+				log.Println("Result channel closed unexpectedly. Exiting loop.")
+				break Loop
+			}
+
+			newTasks, done := update(res)
+
+			if done {
+				log.Println("Termination condition met. Stopping ControlLoop.")
+				break Loop
+			}
+
+			taskQueue = append(taskQueue, newTasks...)
+
+		case sendCh <- nextTask:
+			taskQueue = taskQueue[1:]
+		}
+	}
+}
+
 func WorkerPool[Req, Res any](
 	numWorkers int,
 	taskFn func(Req) Res,
@@ -24,61 +68,3 @@ func WorkerPool[Req, Res any](
 		})
 	}
 }
-
-// ControlLoop manages the overall process, dispatching tasks and propagating results.
-func ControlLoop[S, Req, Res any](
-	dispatch DispatchFunc[S, Req],
-	propagate PropagateFunc[S, Res],
-	shouldTerminate ShouldTerminateFunc[S],
-	reqCh chan<- Req,
-	resCh <-chan Res,
-	state S,
-) {
-	fmt.Println("--- Starting Event-Driven Control Loop ---")
-
-	// 1. Initial pipeline fill
-	// Start by filling the pipeline with a number of tasks equal to the concurrency level.
-	// This ensures that all workers are busy from the beginning.
-	for i := 0; i < cap(reqCh); i++ {
-		if shouldTerminate(state) {
-			break
-		}
-		dispatch(state, reqCh)
-	}
-
-	// 2. Main processing loop
-	// Continue processing results and dispatching new tasks as long as the termination
-	// condition is not met.
-	for !shouldTerminate(state) {
-		result, ok := <-resCh
-		if !ok {
-			// This can happen if the worker pools panic and the pipeline shuts down prematurely.
-			break
-		}
-		propagate(state, result)
-
-		// Check the termination condition again after propagation, before dispatching a new task.
-		if !shouldTerminate(state) {
-			dispatch(state, reqCh)
-		}
-	}
-
-	// 3. Graceful shutdown
-	fmt.Println("\n--- Termination condition met. Closing dispatch channel... ---")
-	close(reqCh) // Signal to the propose workers that no more tasks will be sent.
-
-	fmt.Println("--- Draining remaining results from the pipeline... ---")
-	// Drain any remaining results that were already in flight.
-	// This loop will naturally terminate when `resCh` is closed by the runner,
-	// which happens after all workers have finished.
-	for range resCh {
-		// Do nothing. Just receive to unblock the sender.
-	}
-
-	fmt.Println("--- All pending tasks finished. ---")
-	fmt.Println("--- Control Loop Finished ---")
-}
-
-type DispatchFunc[S, Req any] = func(state S, reqCh chan<- Req)
-type PropagateFunc[S, Res any] = func(state S, result Res)
-type ShouldTerminateFunc[S any] = func(state S) bool

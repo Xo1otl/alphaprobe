@@ -8,7 +8,7 @@ import (
 	"alphaprobe/orchestrator/internal/rastrigin"
 )
 
-func TestRastriginWithRunnerV2(t *testing.T) {
+func TestRastriginWithRunner(t *testing.T) {
 	// --- Configuration ---
 	const (
 		islandPopulation   = 50
@@ -18,7 +18,7 @@ func TestRastriginWithRunnerV2(t *testing.T) {
 		migrationSize      = 5
 		proposeConcurrency = 5
 		observeConcurrency = 5
-		maxQueueSize       = 100
+		maxQueueSize       = 1000
 	)
 
 	// --- State Initialization ---
@@ -31,9 +31,7 @@ func TestRastriginWithRunnerV2(t *testing.T) {
 	)
 
 	// --- Runner Setup ---
-	// Use the simple NewV2 factory as Rastrigin is a 1:1 pipeline.
-	// We explicitly provide the generic type arguments for clarity.
-	run := bilevel.NewV2(
+	run := bilevel.New(
 		controller.Update,
 		rastrigin.Propose,
 		rastrigin.Observe,
@@ -43,9 +41,9 @@ func TestRastriginWithRunnerV2(t *testing.T) {
 	)
 
 	// --- Execution ---
-	fmt.Println("--- Starting Rastrigin GA with RunnerV2 ---")
-	// The runner is started with initial tasks, which we get from a nil-call to Update.
-	initialTasks, _ := controller.Update(nil)
+	fmt.Println("--- Starting Rastrigin GA with Runner ---")
+	// The runner is started with initial tasks, which we get from a zero-value call to Update.
+	initialTasks, _ := controller.Update(0, rastrigin.Context{})
 	run(initialTasks)
 	fmt.Println("--- Rastrigin GA Finished ---")
 
