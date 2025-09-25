@@ -12,9 +12,9 @@ func TestLLMSRWithBilevelRunner(t *testing.T) {
 	// --- Configuration ---
 	const (
 		maxEvaluations     = 1000
-		proposeConcurrency = 10
+		proposeConcurrency = 100
 		observeConcurrency = 100 // A reasonable number for a mock test
-		maxQueueSize       = 1000
+		maxQueueSize       = 10
 	)
 
 	// --- State Initialization ---

@@ -14,11 +14,7 @@ func ControlLoop[Req, Res any](
 	resCh <-chan Res,
 	maxQueueSize int,
 ) {
-	defer func() {
-		log.Println("[ControlLoop] Closing request channel")
-		close(reqCh)
-	}()
-
+	defer close(reqCh)
 	taskQueue := make([]Req, 0, maxQueueSize)
 	taskQueue = append(taskQueue, initialTasks...)
 
@@ -36,28 +32,21 @@ Loop:
 			recvCh = resCh
 		}
 
-		// log.Printf("[ControlLoop] START: Queue=%d, sendCh_nil=%v, recvCh_nil=%v", len(taskQueue), sendCh == nil, recvCh == nil)
-
 		select {
 		case res, ok := <-recvCh:
 			if !ok {
-				// log.Println("[ControlLoop] EXIT: Result channel closed")
 				break Loop
 			}
-			// log.Printf("[ControlLoop] RECEIVED: Result=%v", res)
 
 			newTasks, done := update(res)
 			if done {
-				// log.Println("[ControlLoop] EXIT: Update function returned done")
 				break Loop
 			}
 
 			taskQueue = append(taskQueue, newTasks...)
-			// log.Printf("[ControlLoop] UPDATED: Queue=%d", len(taskQueue))
 
 		case sendCh <- nextTask:
 			taskQueue = taskQueue[1:]
-			// log.Printf("[ControlLoop] SENT: Queue=%d", len(taskQueue))
 		}
 	}
 	log.Println("[ControlLoop] END")

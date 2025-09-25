@@ -1,7 +1,6 @@
 package bilevel
 
 import (
-	"log"
 	"sync"
 
 	"alphaprobe/orchestrator/internal/pipeline"
@@ -169,16 +168,8 @@ func (r *adaptedRunner[PReq, POut, Q, C, E]) Run(initialTasks []PReq) {
 	pipeline.WorkerPool(r.proposeConcurrency, proposeTask, proposeReqCh, proposeResCh, &wgPropose)
 	pipeline.WorkerPool(r.observeConcurrency, observeTask, observeReqCh, observeResCh, &wgObserve)
 
-	go func() {
-		wgPropose.Wait()
-		log.Println("[Runner] Proposers finished, closing proposeResCh")
-		close(proposeResCh)
-	}()
-	go func() {
-		wgObserve.Wait()
-		log.Println("[Runner] Observers finished, closing observeResCh")
-		close(observeResCh)
-	}()
+	go func() { wgPropose.Wait(); close(proposeResCh) }()
+	go func() { wgObserve.Wait(); close(observeResCh) }()
 
 	go r.adapterFn(proposeResCh, observeReqCh)
 
