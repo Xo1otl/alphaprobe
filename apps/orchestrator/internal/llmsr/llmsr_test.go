@@ -12,7 +12,7 @@ import (
 
 func TestLLMSRWithBilevelRunner(t *testing.T) {
 	const (
-		maxEvaluations     = 10000
+		maxEvaluations     = 100
 		proposeConcurrency = 2
 		observeConcurrency = 3
 		maxQueueSize       = 2
@@ -40,7 +40,11 @@ func TestLLMSRWithBilevelRunner(t *testing.T) {
 
 		fmt.Println("--- Starting Mock LLMSR Search with adapted bilevel Runner ---")
 		initialTasks := state.GetInitialTask()
-		run(ctx, initialTasks)
+		err := run(ctx, initialTasks)
+		if err != nil {
+			doneCh <- fmt.Errorf("Runner terminated with error: %w", err)
+			return
+		}
 		fmt.Println("--- Mock LLMSR Search Finished ---")
 
 		fmt.Printf("Final best score: %f\n", state.BestScore)

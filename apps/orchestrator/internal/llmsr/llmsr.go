@@ -3,6 +3,7 @@ package llmsr
 import (
 	"context"
 	"fmt"
+	"log"
 	"math/rand"
 	"sort"
 )
@@ -72,18 +73,25 @@ func (s *State) Update(ctx context.Context, skeleton ProgramSkeleton, score Scor
 		fmt.Printf("New best score: %f (Evaluation #%d)\n", s.BestScore, s.EvaluationsCount)
 	}
 
+	log.Printf("[Update] Received result for skeleton starting with: %q", skeleton[:20])
+	log.Printf("[Update] Metadata parents: %v", metadata.ParentSkeletons)
+	log.Printf("[Update] PendingParents BEFORE delete: %v", s.PendingParents)
 	for _, p := range metadata.ParentSkeletons {
 		delete(s.PendingParents, p)
 	}
+	log.Printf("[Update] PendingParents AFTER delete: %v", s.PendingParents)
 
 	if s.EvaluationsCount >= s.MaxEvaluations {
+		log.Println("[Update] Max evaluations reached. Terminating.")
 		return nil, true
 	}
 
 	if len(s.PendingParents) > 0 {
+		log.Printf("[Update] SKIPPING new task generation. PendingParents is not empty: %v", s.PendingParents)
 		return nil, false
 	}
 
+	log.Println("[Update] PendingParents is empty. Proceeding to generate new task.")
 	availablePrograms := make([]Program, 0, len(s.Programs))
 	for _, p := range s.Programs {
 		if !s.PendingParents[p.Skeleton] {
@@ -92,6 +100,7 @@ func (s *State) Update(ctx context.Context, skeleton ProgramSkeleton, score Scor
 	}
 
 	if len(availablePrograms) < 2 {
+		log.Println("[Update] Not enough available programs to create a new task. Terminating.")
 		return nil, true
 	}
 
@@ -102,6 +111,7 @@ func (s *State) Update(ctx context.Context, skeleton ProgramSkeleton, score Scor
 	parent2 := availablePrograms[1]
 	s.PendingParents[parent1.Skeleton] = true
 	s.PendingParents[parent2.Skeleton] = true
+	log.Printf("[Update] GENERATED new task. New PendingParents: %v", s.PendingParents)
 
 	nextTask := []Program{parent1, parent2}
 	return [][]Program{nextTask}, false

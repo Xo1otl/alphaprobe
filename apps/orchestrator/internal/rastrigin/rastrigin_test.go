@@ -47,7 +47,11 @@ func TestRastriginWithRunner(t *testing.T) {
 
 		fmt.Println("--- Starting Rastrigin GA with Runner ---")
 		initialTasks, _ := state.Update(ctx, nil, 0, rastrigin.Metadata{})
-		run(ctx, initialTasks)
+		err := run(ctx, initialTasks)
+		if err != nil {
+			doneCh <- fmt.Errorf("Runner terminated with error: %w", err)
+			return
+		}
 		fmt.Println("--- Rastrigin GA Finished ---")
 
 		var bestFitness rastrigin.Fitness = 1e6

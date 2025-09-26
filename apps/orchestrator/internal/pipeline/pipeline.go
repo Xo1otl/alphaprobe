@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"sync"
 )
@@ -80,7 +81,7 @@ func (c *Controller[Req, Res]) Loop(
 	reqCh chan<- Req,
 	resCh <-chan Res,
 	maxQueueSize int,
-) {
+) error {
 	defer close(reqCh)
 	taskQueue := make([]Req, 0, maxQueueSize)
 	taskQueue = append(taskQueue, initialTasks...)
@@ -94,15 +95,14 @@ Loop:
 			nextTask = taskQueue[0]
 		}
 
-		var recvCh <-chan Res
-		if len(taskQueue) < maxQueueSize {
-			recvCh = resCh
+		if len(taskQueue) > maxQueueSize {
+			return fmt.Errorf("task queue overflow: current size (%d) exceeds max size (%d)", len(taskQueue), maxQueueSize)
 		}
 
 		select {
 		case <-c.ctx.Done():
 			break Loop
-		case res, ok := <-recvCh:
+		case res, ok := <-resCh:
 			if !ok {
 				break Loop
 			}
@@ -119,6 +119,7 @@ Loop:
 		}
 	}
 	log.Println("[Pipeline.Loop] END")
+	return nil
 }
 
 func (c *Controller[_, _]) Wait() {

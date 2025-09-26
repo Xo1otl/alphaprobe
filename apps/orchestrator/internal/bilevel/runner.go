@@ -1,15 +1,13 @@
 package bilevel
 
 import (
-	"context"
-	"log"
-
 	"alphaprobe/orchestrator/internal/pipeline"
+	"context"
 )
 
 // --- Public API ---
 
-type RunFunc[PReq any] func(ctx context.Context, initialTasks []PReq)
+type RunFunc[PReq any] func(ctx context.Context, initialTasks []PReq) error
 type UpdateFunc[Q, E, D, PReq any] func(ctx context.Context, query Q, evidence E, data D) (newTasks []PReq, done bool)
 type ProposeFunc[PReq any, POut any, D any] func(ctx context.Context, preq PReq) (pout POut, data D)
 type ObserveFunc[Q any, E any] func(ctx context.Context, query Q) (evidence E)
@@ -104,7 +102,7 @@ type simpleRunner[PReq, Q, D, E any] struct {
 	maxQueueSize       int
 }
 
-func (r *simpleRunner[PReq, Q, D, E]) Run(ctx context.Context, initialTasks []PReq) {
+func (r *simpleRunner[PReq, Q, D, E]) Run(ctx context.Context, initialTasks []PReq) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -129,10 +127,13 @@ func (r *simpleRunner[PReq, Q, D, E]) Run(ctx context.Context, initialTasks []PR
 	controller := pipeline.NewController[PReq, *observeRes[Q, E, D]](ctx, 2)
 	pipeline.LaunchWorkers(controller, r.proposeConcurrency, proposeTask, proposeReqCh, observeReqCh, func() { close(observeReqCh) })
 	pipeline.LaunchWorkers(controller, r.observeConcurrency, observeTask, observeReqCh, observeResCh, nil)
-	controller.Loop(update, initialTasks, proposeReqCh, observeResCh, r.maxQueueSize)
 
-	cancel()
-	controller.Wait()
+	defer func() {
+		cancel()
+		controller.Wait()
+	}()
+
+	return controller.Loop(update, initialTasks, proposeReqCh, observeResCh, r.maxQueueSize)
 }
 
 type adaptedRunner[PReq, POut, Q, D, E any] struct {
@@ -145,7 +146,7 @@ type adaptedRunner[PReq, POut, Q, D, E any] struct {
 	maxQueueSize       int
 }
 
-func (r *adaptedRunner[PReq, POut, Q, D, E]) Run(ctx context.Context, initialTasks []PReq) {
+func (r *adaptedRunner[PReq, POut, Q, D, E]) Run(ctx context.Context, initialTasks []PReq) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -169,15 +170,14 @@ func (r *adaptedRunner[PReq, POut, Q, D, E]) Run(ctx context.Context, initialTas
 	}
 
 	controller := pipeline.NewController[PReq, *observeRes[Q, E, D]](ctx, 2)
-	pipeline.LaunchWorkers(controller, r.proposeConcurrency, proposeTask, proposeReqCh, proposeResCh, func() {
-		log.Println("[adaptedRunner] Closing proposeResCh...")
-		close(proposeResCh)
-	})
+	pipeline.LaunchWorkers(controller, r.proposeConcurrency, proposeTask, proposeReqCh, proposeResCh, func() { close(proposeResCh) })
 	pipeline.LaunchWorkers(controller, r.observeConcurrency, observeTask, observeReqCh, observeResCh, nil)
 	go r.adapterFn(proposeResCh, observeReqCh)
-	controller.Loop(update, initialTasks, proposeReqCh, observeResCh, r.maxQueueSize)
 
-	cancel()
-	log.Println("[adaptedRunner] Calling controller.Wait()...")
-	controller.Wait()
+	defer func() {
+		cancel()
+		controller.Wait()
+	}()
+
+	return controller.Loop(update, initialTasks, proposeReqCh, observeResCh, r.maxQueueSize)
 }
