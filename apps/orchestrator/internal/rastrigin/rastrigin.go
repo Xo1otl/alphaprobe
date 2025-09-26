@@ -63,10 +63,10 @@ func NewState(
 	}
 }
 
-func (s *State) Update(ctx context.Context, gene Gene, fitness Fitness, metadata Metadata) ([]*Island, bool) {
-	if gene != nil {
-		islandID := metadata.IslandID
-		evaluatedChild := Individual{Gene: gene, Fitness: fitness}
+func (s *State) Update(ctx context.Context, res ObserveResult) ([]*Island, bool) {
+	if res.Gene != nil {
+		islandID := res.Metadata.IslandID
+		evaluatedChild := Individual{Gene: res.Gene, Fitness: res.Fitness}
 
 		delete(s.PendingIslands, islandID)
 		s.EvaluationsCount++
@@ -97,7 +97,27 @@ func (s *State) Update(ctx context.Context, gene Gene, fitness Fitness, metadata
 	return []*Island{nextTask}, false
 }
 
-func Propose(ctx context.Context, island *Island) (Gene, Metadata) {
+// --- Types for bilevelv2 Runner ---
+
+type ProposeResult struct {
+	Gene     Gene
+	Metadata Metadata
+}
+
+type ObserveRequest struct {
+	Gene     Gene
+	Metadata Metadata
+}
+
+type ObserveResult struct {
+	Gene     Gene
+	Fitness  Fitness
+	Metadata Metadata
+}
+
+// --- Pipeline Functions ---
+
+func Propose(ctx context.Context, island *Island) ProposeResult {
 	pop := island.Population
 	tournament := func() Individual {
 		best := pop[rand.Intn(len(pop))]
@@ -126,16 +146,20 @@ func Propose(ctx context.Context, island *Island) (Gene, Metadata) {
 		}
 	}
 
-	return childGene, Metadata{IslandID: island.ID}
+	return ProposeResult{Gene: childGene, Metadata: Metadata{IslandID: island.ID}}
 }
 
-func Observe(ctx context.Context, gene Gene) Fitness {
+func Expand(ctx context.Context, pRes ProposeResult) ([]ObserveRequest, bool) {
+	return []ObserveRequest{{Gene: pRes.Gene, Metadata: pRes.Metadata}}, false
+}
+
+func Observe(ctx context.Context, req ObserveRequest) ObserveResult {
 	a := 10.0
-	sum := a * float64(len(gene))
-	for _, x := range gene {
+	sum := a * float64(len(req.Gene))
+	for _, x := range req.Gene {
 		sum += x*x - a*math.Cos(2*math.Pi*x)
 	}
-	return Fitness(sum)
+	return ObserveResult{Gene: req.Gene, Fitness: Fitness(sum), Metadata: req.Metadata}
 }
 
 func newInitialPopulation(size int) Population {
@@ -145,7 +169,8 @@ func newInitialPopulation(size int) Population {
 		for j := range gene {
 			gene[j] = -5.12 + rand.Float64()*(5.12-(-5.12))
 		}
-		pop[i] = Individual{Gene: gene, Fitness: Observe(context.Background(), gene)}
+		fitness := Observe(context.Background(), ObserveRequest{Gene: gene})
+		pop[i] = Individual{Gene: gene, Fitness: fitness.Fitness}
 	}
 	return pop
 }

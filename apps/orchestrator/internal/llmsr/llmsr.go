@@ -52,11 +52,11 @@ func (s *State) GetInitialTask() [][]Program {
 	return [][]Program{nextTask}
 }
 
-func (s *State) Update(ctx context.Context, skeleton ProgramSkeleton, score Score, metadata Metadata) ([][]Program, bool) {
+func (s *State) Update(ctx context.Context, res ObserveResult) ([][]Program, bool) {
 	s.EvaluationsCount++
 	newProgram := Program{
-		Skeleton: skeleton,
-		Score:    score,
+		Skeleton: res.Query,
+		Score:    res.Evidence,
 	}
 	s.Programs = append(s.Programs, newProgram)
 
@@ -68,15 +68,15 @@ func (s *State) Update(ctx context.Context, skeleton ProgramSkeleton, score Scor
 		s.Programs = s.Programs[:maxPopulation]
 	}
 
-	if score < s.BestScore {
-		s.BestScore = score
+	if res.Evidence < s.BestScore {
+		s.BestScore = res.Evidence
 		fmt.Printf("New best score: %f (Evaluation #%d)\n", s.BestScore, s.EvaluationsCount)
 	}
 
-	log.Printf("[Update] Received result for skeleton starting with: %q", skeleton[:20])
-	log.Printf("[Update] Metadata parents: %v", metadata.ParentSkeletons)
+	log.Printf("[Update] Received result for skeleton starting with: %q", res.Query[:20])
+	log.Printf("[Update] Metadata parents: %v", res.Metadata.ParentSkeletons)
 	log.Printf("[Update] PendingParents BEFORE delete: %v", s.PendingParents)
-	for _, p := range metadata.ParentSkeletons {
+	for _, p := range res.Metadata.ParentSkeletons {
 		delete(s.PendingParents, p)
 	}
 	log.Printf("[Update] PendingParents AFTER delete: %v", s.PendingParents)
@@ -117,7 +117,27 @@ func (s *State) Update(ctx context.Context, skeleton ProgramSkeleton, score Scor
 	return [][]Program{nextTask}, false
 }
 
-func Propose(ctx context.Context, parents []Program) ([]ProgramSkeleton, Metadata) {
+// --- Types for bilevelv2 Runner ---
+
+type ProposeResult struct {
+	Skeletons []ProgramSkeleton
+	Metadata  Metadata
+}
+
+type ObserveRequest struct {
+	Query    ProgramSkeleton
+	Metadata Metadata
+}
+
+type ObserveResult struct {
+	Query    ProgramSkeleton
+	Evidence Score
+	Metadata Metadata
+}
+
+// --- Pipeline Functions ---
+
+func Propose(ctx context.Context, parents []Program) ProposeResult {
 	batchSize := rand.Intn(4) + 1
 	newSkeletons := make([]ProgramSkeleton, 0, batchSize)
 	for range batchSize {
@@ -130,16 +150,30 @@ func Propose(ctx context.Context, parents []Program) ([]ProgramSkeleton, Metadat
 		parentSkeletons[i] = p.Skeleton
 	}
 
-	metadata := Metadata{
-		ParentSkeletons: parentSkeletons,
+	return ProposeResult{
+		Skeletons: newSkeletons,
+		Metadata: Metadata{
+			ParentSkeletons: parentSkeletons,
+		},
 	}
-	return newSkeletons, metadata
 }
 
-func FanOut(pout []ProgramSkeleton, data Metadata) []ProgramSkeleton {
-	return pout
+func Expand(ctx context.Context, pRes ProposeResult) ([]ObserveRequest, bool) {
+	reqs := make([]ObserveRequest, len(pRes.Skeletons))
+	for i, s := range pRes.Skeletons {
+		reqs[i] = ObserveRequest{
+			Query:    s,
+			Metadata: pRes.Metadata,
+		}
+	}
+	return reqs, false
 }
 
-func Observe(ctx context.Context, skeleton ProgramSkeleton) Score {
-	return rand.Float64()
+func Observe(ctx context.Context, req ObserveRequest) ObserveResult {
+	score := rand.Float64()
+	return ObserveResult{
+		Query:    req.Query,
+		Evidence: score,
+		Metadata: req.Metadata,
+	}
 }

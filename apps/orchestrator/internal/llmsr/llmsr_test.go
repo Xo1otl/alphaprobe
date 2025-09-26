@@ -15,32 +15,34 @@ func TestLLMSRWithBilevelRunner(t *testing.T) {
 		maxEvaluations     = 10
 		proposeConcurrency = 2
 		observeConcurrency = 3
-		maxQueueSize       = 2
+		maxQueueSize       = 10
 		testTimeout        = 5 * time.Second
 	)
 
-	doneCh := make(chan error, 1) // Buffered channel to prevent goroutine leak on timeout
+	doneCh := make(chan error, 1)
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
 
 	go func() {
 		state := llmsr.NewState("def initial_program(x): return x", maxEvaluations)
 
-		adapter := bilevel.NewFanOutAdapter(llmsr.FanOut)
+		updateFn := func(ctx context.Context, res llmsr.ObserveResult) ([][]llmsr.Program, bool) {
+			return state.Update(ctx, res)
+		}
 
-		run := bilevel.RunWithAdapter(
-			state.Update,
+		runner := bilevel.NewRunner(
+			updateFn,
 			llmsr.Propose,
-			adapter,
+			llmsr.Expand,
 			llmsr.Observe,
 			proposeConcurrency,
 			observeConcurrency,
 			maxQueueSize,
 		)
 
-		fmt.Println("--- Starting Mock LLMSR Search with adapted bilevel Runner ---")
+		fmt.Println("--- Starting Mock LLMSR Search with bilevelv2 Runner ---")
 		initialTasks := state.GetInitialTask()
-		err := run(ctx, initialTasks)
+		err := runner.Run(ctx, initialTasks)
 		if err != nil {
 			doneCh <- fmt.Errorf("Runner terminated with error: %w", err)
 			return
@@ -70,7 +72,7 @@ func TestLLMSRWithBilevelRunner(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-	case <-time.After(testTimeout):
-		t.Fatal("Test timed out after 5 seconds (potential deadlock)")
+	case <-ctx.Done():
+		t.Fatal("Test timed out (potential deadlock)")
 	}
 }

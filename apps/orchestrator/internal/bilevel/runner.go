@@ -1,183 +1,123 @@
 package bilevel
 
 import (
-	"alphaprobe/orchestrator/internal/pipeline"
 	"context"
+	"fmt"
+
+	"alphaprobe/orchestrator/internal/pipeline"
 )
 
 // --- Public API ---
 
-type RunFunc[PReq any] func(ctx context.Context, initialTasks []PReq) error
-type UpdateFunc[Q, E, D, PReq any] func(ctx context.Context, query Q, evidence E, data D) (newTasks []PReq, done bool)
-type ProposeFunc[PReq any, POut any, D any] func(ctx context.Context, preq PReq) (pout POut, data D)
-type ObserveFunc[Q any, E any] func(ctx context.Context, query Q) (evidence E)
-type AdapterFunc[POut any, Q any, D any] func(in <-chan proposeRes[POut, D], out chan<- *observeReq[Q, D])
-type FanOutFunc[POut any, Q any, D any] func(pout POut, data D) []Q
+type UpdateFunc[ObsRes, PReq any] func(ctx context.Context, res ObsRes) (newTasks []PReq, done bool)
+type ProposeFunc[PReq, PRes any] func(ctx context.Context, req PReq) PRes
+type ExpandFunc[PRes, OReq any] func(ctx context.Context, res PRes) (newTasks []OReq, done bool)
+type ObserveFunc[OReq, ORes any] func(ctx context.Context, req OReq) ORes
 
-// --- Internal Data Structures ---
+// --- Runner ---
 
-type proposeRes[POut any, D any] struct {
-	POut POut
-	Data D
+type Runner[PReq, PRes, OReq, ORes any] struct {
+	updateFn           UpdateFunc[ORes, PReq]
+	proposeFn          ProposeFunc[PReq, PRes]
+	expandFn           ExpandFunc[PRes, OReq]
+	observeFn          ObserveFunc[OReq, ORes]
+	proposeConcurrency int
+	observeConcurrency int
+	maxQueueSize       int
 }
 
-type observeReq[Q any, D any] struct {
-	Query Q
-	Data  D
+func NewRunner[PReq, PRes, OReq, ORes any](
+	updateFn UpdateFunc[ORes, PReq],
+	proposeFn ProposeFunc[PReq, PRes],
+	expandFn ExpandFunc[PRes, OReq],
+	observeFn ObserveFunc[OReq, ORes],
+	proposeConcurrency int,
+	observeConcurrency int,
+	maxQueueSize int,
+) *Runner[PReq, PRes, OReq, ORes] {
+	return &Runner[PReq, PRes, OReq, ORes]{
+		updateFn:           updateFn,
+		proposeFn:          proposeFn,
+		expandFn:           expandFn,
+		observeFn:          observeFn,
+		proposeConcurrency: proposeConcurrency,
+		observeConcurrency: observeConcurrency,
+		maxQueueSize:       maxQueueSize,
+	}
 }
 
-type observeRes[Q, E, D any] struct {
-	Query    Q
-	Evidence E
-	Data     D
-}
+func (r *Runner[PReq, PRes, OReq, ORes]) Run(ctx context.Context, initialTasks []PReq) error {
+	ctx, cancel := context.WithCancel(ctx)
+	ring := pipeline.NewRing(ctx)
 
-// --- Factories ---
+	proposeReqQueue := make([]PReq, 0, r.maxQueueSize)
+	proposeReqQueue = append(proposeReqQueue, initialTasks...)
 
-func NewFanOutAdapter[POut any, Q any, D any](
-	fanOut FanOutFunc[POut, Q, D],
-) AdapterFunc[POut, Q, D] {
-	return func(in <-chan proposeRes[POut, D], out chan<- *observeReq[Q, D]) {
-		defer close(out)
-		for pRes := range in {
-			queries := fanOut(pRes.POut, pRes.Data)
-			for _, q := range queries {
-				out <- &observeReq[Q, D]{
-					Query: q,
-					Data:  pRes.Data,
-				}
-			}
+	observeReqQueue := make([]OReq, 0, r.maxQueueSize)
+
+	proposeReqCh := make(chan PReq, r.proposeConcurrency)
+	proposeResCh := make(chan PRes, r.proposeConcurrency)
+	observeReqCh := make(chan OReq, r.observeConcurrency)
+	observeResCh := make(chan ORes, r.observeConcurrency)
+
+	// --- State Controller Callbacks ---
+	onObserveResult := func(res ORes) (done bool) {
+		newTasks, done := r.updateFn(ctx, res)
+		if done {
+			cancel()
+			return true
 		}
+		proposeReqQueue = append(proposeReqQueue, newTasks...)
+		if len(proposeReqQueue) > r.maxQueueSize {
+			fmt.Printf("propose task queue overflow\n")
+			cancel()
+			return true
+		}
+		return false
 	}
-}
-
-func Run[PReq, Q, D, E any](
-	updateFn UpdateFunc[Q, E, D, PReq],
-	proposeFn ProposeFunc[PReq, Q, D],
-	observeFn ObserveFunc[Q, E],
-	proposeConcurrency int,
-	observeConcurrency int,
-	maxQueueSize int,
-) RunFunc[PReq] {
-	r := &simpleRunner[PReq, Q, D, E]{
-		updateFn:           updateFn,
-		proposeFn:          proposeFn,
-		observeFn:          observeFn,
-		proposeConcurrency: proposeConcurrency,
-		observeConcurrency: observeConcurrency,
-		maxQueueSize:       maxQueueSize,
+	onNextProposeTask := func() (task PReq, ok bool) {
+		if len(proposeReqQueue) == 0 {
+			return task, false
+		}
+		return proposeReqQueue[0], true
 	}
-	return r.Run
-}
-
-func RunWithAdapter[PReq, POut, Q, D, E any](
-	updateFn UpdateFunc[Q, E, D, PReq],
-	proposeFn ProposeFunc[PReq, POut, D],
-	adapterFn AdapterFunc[POut, Q, D],
-	observeFn ObserveFunc[Q, E],
-	proposeConcurrency int,
-	observeConcurrency int,
-	maxQueueSize int,
-) RunFunc[PReq] {
-	r := &adaptedRunner[PReq, POut, Q, D, E]{
-		updateFn:           updateFn,
-		proposeFn:          proposeFn,
-		adapterFn:          adapterFn,
-		observeFn:          observeFn,
-		proposeConcurrency: proposeConcurrency,
-		observeConcurrency: observeConcurrency,
-		maxQueueSize:       maxQueueSize,
-	}
-	return r.Run
-}
-
-// --- Private Runner Implementations ---
-
-type simpleRunner[PReq, Q, D, E any] struct {
-	updateFn           UpdateFunc[Q, E, D, PReq]
-	proposeFn          ProposeFunc[PReq, Q, D]
-	observeFn          ObserveFunc[Q, E]
-	proposeConcurrency int
-	observeConcurrency int
-	maxQueueSize       int
-}
-
-func (r *simpleRunner[PReq, Q, D, E]) Run(ctx context.Context, initialTasks []PReq) error {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	proposeReqCh := make(chan PReq, r.proposeConcurrency)
-	observeReqCh := make(chan *observeReq[Q, D], r.observeConcurrency)
-	observeResCh := make(chan *observeRes[Q, E, D], r.observeConcurrency)
-
-	proposeTask := func(ctx context.Context, req PReq) *observeReq[Q, D] {
-		q, data := r.proposeFn(ctx, req)
-		return &observeReq[Q, D]{Query: q, Data: data}
+	onProposeTaskSent := func() {
+		proposeReqQueue = proposeReqQueue[1:]
 	}
 
-	observeTask := func(ctx context.Context, obsIn *observeReq[Q, D]) *observeRes[Q, E, D] {
-		evidence := r.observeFn(ctx, obsIn.Query)
-		return &observeRes[Q, E, D]{Query: obsIn.Query, Evidence: evidence, Data: obsIn.Data}
+	// --- Adapter Controller Callbacks ---
+	onProposeResult := func(res PRes) (done bool) {
+		newTasks, done := r.expandFn(ctx, res)
+		if done {
+			cancel()
+			return true
+		}
+		observeReqQueue = append(observeReqQueue, newTasks...)
+		if len(observeReqQueue) > r.maxQueueSize {
+			fmt.Printf("observe task queue overflow\n")
+			cancel()
+			return true
+		}
+		return false
+	}
+	onNextObserveTask := func() (task OReq, ok bool) {
+		if len(observeReqQueue) == 0 {
+			return task, false
+		}
+		return observeReqQueue[0], true
+	}
+	onObserveTaskSent := func() {
+		observeReqQueue = observeReqQueue[1:]
 	}
 
-	update := func(ctx context.Context, res *observeRes[Q, E, D]) ([]PReq, bool) {
-		return r.updateFn(ctx, res.Query, res.Evidence, res.Data)
-	}
+	// --- Launch Pipeline ---
+	pipeline.GoWorkers(ring, r.proposeConcurrency, r.proposeFn, proposeReqCh, proposeResCh)
+	pipeline.GoController(ring, onProposeResult, onNextObserveTask, onObserveTaskSent, proposeResCh, observeReqCh)
+	pipeline.GoWorkers(ring, r.observeConcurrency, r.observeFn, observeReqCh, observeResCh)
+	pipeline.GoController(ring, onObserveResult, onNextProposeTask, onProposeTaskSent, observeResCh, proposeReqCh)
 
-	controller := pipeline.NewController[PReq, *observeRes[Q, E, D]](ctx, 2)
-	pipeline.LaunchWorkers(controller, r.proposeConcurrency, proposeTask, proposeReqCh, observeReqCh, func() { close(observeReqCh) })
-	pipeline.LaunchWorkers(controller, r.observeConcurrency, observeTask, observeReqCh, observeResCh, nil)
+	ring.Loop()
+	ring.Wait()
 
-	defer func() {
-		cancel()
-		controller.Wait()
-	}()
-
-	return controller.Loop(update, initialTasks, proposeReqCh, observeResCh, r.maxQueueSize)
-}
-
-type adaptedRunner[PReq, POut, Q, D, E any] struct {
-	updateFn           UpdateFunc[Q, E, D, PReq]
-	proposeFn          ProposeFunc[PReq, POut, D]
-	adapterFn          AdapterFunc[POut, Q, D]
-	observeFn          ObserveFunc[Q, E]
-	proposeConcurrency int
-	observeConcurrency int
-	maxQueueSize       int
-}
-
-func (r *adaptedRunner[PReq, POut, Q, D, E]) Run(ctx context.Context, initialTasks []PReq) error {
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	proposeReqCh := make(chan PReq, r.proposeConcurrency)
-	proposeResCh := make(chan proposeRes[POut, D], r.proposeConcurrency)
-	observeReqCh := make(chan *observeReq[Q, D], r.observeConcurrency)
-	observeResCh := make(chan *observeRes[Q, E, D], r.observeConcurrency)
-
-	proposeTask := func(ctx context.Context, req PReq) proposeRes[POut, D] {
-		pout, data := r.proposeFn(ctx, req)
-		return proposeRes[POut, D]{POut: pout, Data: data}
-	}
-
-	observeTask := func(ctx context.Context, obsReq *observeReq[Q, D]) *observeRes[Q, E, D] {
-		evidence := r.observeFn(ctx, obsReq.Query)
-		return &observeRes[Q, E, D]{Query: obsReq.Query, Evidence: evidence, Data: obsReq.Data}
-	}
-
-	update := func(ctx context.Context, res *observeRes[Q, E, D]) ([]PReq, bool) {
-		return r.updateFn(ctx, res.Query, res.Evidence, res.Data)
-	}
-
-	controller := pipeline.NewController[PReq, *observeRes[Q, E, D]](ctx, 2)
-	pipeline.LaunchWorkers(controller, r.proposeConcurrency, proposeTask, proposeReqCh, proposeResCh, func() { close(proposeResCh) })
-	pipeline.LaunchWorkers(controller, r.observeConcurrency, observeTask, observeReqCh, observeResCh, nil)
-	go r.adapterFn(proposeResCh, observeReqCh)
-
-	defer func() {
-		cancel()
-		controller.Wait()
-	}()
-
-	return controller.Loop(update, initialTasks, proposeReqCh, observeResCh, r.maxQueueSize)
+	return nil
 }
