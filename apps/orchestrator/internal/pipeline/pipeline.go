@@ -21,15 +21,21 @@ type workerManager interface {
 type Controller[Req, Res any] struct {
 	ctx    context.Context
 	stages []stage
+	idx    int
 }
 
-func NewController[Req, Res any](ctx context.Context) *Controller[Req, Res] {
-	return &Controller[Req, Res]{ctx: ctx}
+func NewController[Req, Res any](ctx context.Context, numStages int) *Controller[Req, Res] {
+	return &Controller[Req, Res]{
+		ctx:    ctx,
+		stages: make([]stage, numStages),
+	}
 }
 
 func (c *Controller[_, _]) addStage(closeFn func()) *sync.WaitGroup {
-	c.stages = append(c.stages, stage{closeFn: closeFn})
-	return &c.stages[len(c.stages)-1].wg
+	c.stages[c.idx] = stage{closeFn: closeFn}
+	wg := &c.stages[c.idx].wg
+	c.idx++
+	return wg
 }
 
 func (c *Controller[_, _]) getContext() context.Context {

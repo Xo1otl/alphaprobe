@@ -126,7 +126,7 @@ func (r *simpleRunner[PReq, Q, D, E]) Run(ctx context.Context, initialTasks []PR
 		return r.updateFn(ctx, res.Query, res.Evidence, res.Data)
 	}
 
-	controller := pipeline.NewController[PReq, *observeRes[Q, E, D]](ctx)
+	controller := pipeline.NewController[PReq, *observeRes[Q, E, D]](ctx, 2)
 	pipeline.LaunchWorkers(controller, r.proposeConcurrency, proposeTask, proposeReqCh, observeReqCh, func() { close(observeReqCh) })
 	pipeline.LaunchWorkers(controller, r.observeConcurrency, observeTask, observeReqCh, observeResCh, nil)
 	controller.Loop(update, initialTasks, proposeReqCh, observeResCh, r.maxQueueSize)
@@ -168,7 +168,7 @@ func (r *adaptedRunner[PReq, POut, Q, D, E]) Run(ctx context.Context, initialTas
 		return r.updateFn(ctx, res.Query, res.Evidence, res.Data)
 	}
 
-	controller := pipeline.NewController[PReq, *observeRes[Q, E, D]](ctx)
+	controller := pipeline.NewController[PReq, *observeRes[Q, E, D]](ctx, 2)
 	pipeline.LaunchWorkers(controller, r.proposeConcurrency, proposeTask, proposeReqCh, proposeResCh, func() {
 		log.Println("[adaptedRunner] Closing proposeResCh...")
 		close(proposeResCh)
