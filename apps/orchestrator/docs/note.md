@@ -24,3 +24,19 @@ graph TD
     C -- "Output C" --> Ad_CA;
     Ad_CA -- "Input A" --> A;
 ```
+
+```mermaid
+graph TD
+    subgraph Propose Stage
+        Propose_Pool[Propose Worker Pool]
+    end
+    subgraph Observe Stage
+        Observe_Pool[Observe Worker Pool]
+    end
+    
+    Update_Adapter(Stateful Update Adapter<br/>- Manages Task Queue<br/>- Calls updateFn<br/>- Decides when to stop)
+    
+    Propose_Pool -- POut/Q --> Observe_Pool
+    Observe_Pool -- ObserveRes --> Update_Adapter
+    Update_Adapter -- PReq --> Propose_Pool
+```
