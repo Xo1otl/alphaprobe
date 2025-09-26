@@ -26,14 +26,14 @@ func TestLLMSRWithBilevelRunner(t *testing.T) {
 	go func() {
 		state := llmsr.NewState("def initial_program(x): return x", maxEvaluations)
 
-		updateFn := func(ctx context.Context, res llmsr.ObserveResult) ([][]llmsr.Program, bool) {
-			return state.Update(ctx, res)
+		updateFn := func(res llmsr.ObserveResult) ([][]llmsr.Program, bool) {
+			return state.Update(res)
 		}
 
 		runner := bilevel.NewRunner(
 			updateFn,
 			llmsr.Propose,
-			llmsr.Expand,
+			llmsr.AdapterFn,
 			llmsr.Observe,
 			proposeConcurrency,
 			observeConcurrency,
@@ -42,11 +42,7 @@ func TestLLMSRWithBilevelRunner(t *testing.T) {
 
 		fmt.Println("--- Starting Mock LLMSR Search with bilevelv2 Runner ---")
 		initialTasks := state.GetInitialTask()
-		err := runner.Run(ctx, initialTasks)
-		if err != nil {
-			doneCh <- fmt.Errorf("Runner terminated with error: %w", err)
-			return
-		}
+		runner.Run(ctx, initialTasks)
 		fmt.Println("--- Mock LLMSR Search Finished ---")
 
 		fmt.Printf("Final best score: %f\n", state.BestScore)

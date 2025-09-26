@@ -36,14 +36,14 @@ func TestRastriginWithRunner(t *testing.T) {
 			migrationSize,
 		)
 
-		updateFn := func(ctx context.Context, res rastrigin.ObserveResult) ([]*rastrigin.Island, bool) {
-			return state.Update(ctx, res)
+		updateFn := func(res rastrigin.ObserveResult) ([]*rastrigin.Island, bool) {
+			return state.Update(res)
 		}
 
 		runner := bilevel.NewRunner(
 			updateFn,
 			rastrigin.Propose,
-			rastrigin.Expand,
+			rastrigin.AdapterFn,
 			rastrigin.Observe,
 			proposeConcurrency,
 			observeConcurrency,
@@ -51,12 +51,8 @@ func TestRastriginWithRunner(t *testing.T) {
 		)
 
 		fmt.Println("--- Starting Rastrigin GA with Runner ---")
-		initialTasks, _ := state.Update(ctx, rastrigin.ObserveResult{})
-		err := runner.Run(ctx, initialTasks)
-		if err != nil {
-			doneCh <- fmt.Errorf("Runner terminated with error: %w", err)
-			return
-		}
+		initialTasks, _ := state.Update(rastrigin.ObserveResult{})
+		runner.Run(ctx, initialTasks)
 		fmt.Println("--- Rastrigin GA Finished ---")
 
 		var bestFitness rastrigin.Fitness = 1e6

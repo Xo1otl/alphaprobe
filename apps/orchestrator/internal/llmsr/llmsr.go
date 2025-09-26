@@ -52,7 +52,7 @@ func (s *State) GetInitialTask() [][]Program {
 	return [][]Program{nextTask}
 }
 
-func (s *State) Update(ctx context.Context, res ObserveResult) ([][]Program, bool) {
+func (s *State) Update(res ObserveResult) ([][]Program, bool) {
 	s.EvaluationsCount++
 	newProgram := Program{
 		Skeleton: res.Query,
@@ -158,7 +158,7 @@ func Propose(ctx context.Context, parents []Program) ProposeResult {
 	}
 }
 
-func Expand(ctx context.Context, pRes ProposeResult) ([]ObserveRequest, bool) {
+func AdapterFn(pRes ProposeResult) ([]ObserveRequest, bool) {
 	reqs := make([]ObserveRequest, len(pRes.Skeletons))
 	for i, s := range pRes.Skeletons {
 		reqs[i] = ObserveRequest{

@@ -63,7 +63,7 @@ func NewState(
 	}
 }
 
-func (s *State) Update(ctx context.Context, res ObserveResult) ([]*Island, bool) {
+func (s *State) Update(res ObserveResult) ([]*Island, bool) {
 	if res.Gene != nil {
 		islandID := res.Metadata.IslandID
 		evaluatedChild := Individual{Gene: res.Gene, Fitness: res.Fitness}
@@ -149,7 +149,7 @@ func Propose(ctx context.Context, island *Island) ProposeResult {
 	return ProposeResult{Gene: childGene, Metadata: Metadata{IslandID: island.ID}}
 }
 
-func Expand(ctx context.Context, pRes ProposeResult) ([]ObserveRequest, bool) {
+func AdapterFn(pRes ProposeResult) ([]ObserveRequest, bool) {
 	return []ObserveRequest{{Gene: pRes.Gene, Metadata: pRes.Metadata}}, false
 }
 
