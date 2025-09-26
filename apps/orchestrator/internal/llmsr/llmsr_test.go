@@ -13,44 +13,60 @@ import (
 func TestLLMSRWithBilevelRunner(t *testing.T) {
 	const (
 		maxEvaluations     = 10000
-		proposeConcurrency = 10
-		observeConcurrency = 1
-		maxQueueSize       = 1
-		testTimeout        = 10 * time.Second
+		proposeConcurrency = 2
+		observeConcurrency = 3
+		maxQueueSize       = 2
+		testTimeout        = 5 * time.Second
 	)
 
+	doneCh := make(chan error, 1) // Buffered channel to prevent goroutine leak on timeout
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
 
-	state := llmsr.NewState("def initial_program(x): return x", maxEvaluations)
+	go func() {
+		state := llmsr.NewState("def initial_program(x): return x", maxEvaluations)
 
-	adapter := bilevel.NewFanOutAdapter(llmsr.FanOut)
+		adapter := bilevel.NewFanOutAdapter(llmsr.FanOut)
 
-	run := bilevel.RunWithAdapter(
-		state.Update,
-		llmsr.Propose,
-		adapter,
-		llmsr.Observe,
-		proposeConcurrency,
-		observeConcurrency,
-		maxQueueSize,
-	)
+		run := bilevel.RunWithAdapter(
+			state.Update,
+			llmsr.Propose,
+			adapter,
+			llmsr.Observe,
+			proposeConcurrency,
+			observeConcurrency,
+			maxQueueSize,
+		)
 
-	fmt.Println("--- Starting Mock LLMSR Search with adapted bilevel Runner ---")
-	initialTasks := state.GetInitialTask()
-	run(ctx, initialTasks)
-	fmt.Println("--- Mock LLMSR Search Finished ---")
+		fmt.Println("--- Starting Mock LLMSR Search with adapted bilevel Runner ---")
+		initialTasks := state.GetInitialTask()
+		run(ctx, initialTasks)
+		fmt.Println("--- Mock LLMSR Search Finished ---")
 
-	fmt.Printf("Final best score: %f\n", state.BestScore)
-	fmt.Printf("Total evaluations: %d\n", state.EvaluationsCount)
+		fmt.Printf("Final best score: %f\n", state.BestScore)
+		fmt.Printf("Total evaluations: %d\n", state.EvaluationsCount)
 
-	if state.EvaluationsCount < maxEvaluations {
-		t.Errorf("Expected at least %d evaluations, but got %d", maxEvaluations, state.EvaluationsCount)
-	}
-	if state.BestScore > 1.0 {
-		t.Errorf("Expected best score to be less than 1.0, but got %f", state.BestScore)
-	}
-	if len(state.Programs) > 10 {
-		t.Errorf("Expected population size to be at most 10, but got %d", len(state.Programs))
+		if state.EvaluationsCount < maxEvaluations {
+			doneCh <- fmt.Errorf("Expected at least %d evaluations, but got %d", maxEvaluations, state.EvaluationsCount)
+			return
+		}
+		if state.BestScore > 1.0 {
+			doneCh <- fmt.Errorf("Expected best score to be less than 1.0, but got %f", state.BestScore)
+			return
+		}
+		if len(state.Programs) > 10 {
+			doneCh <- fmt.Errorf("Expected population size to be at most 10, but got %d", len(state.Programs))
+			return
+		}
+		close(doneCh)
+	}()
+
+	select {
+	case err := <-doneCh:
+		if err != nil {
+			t.Error(err)
+		}
+	case <-time.After(testTimeout):
+		t.Fatal("Test timed out after 5 seconds (potential deadlock)")
 	}
 }

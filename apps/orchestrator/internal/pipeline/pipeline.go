@@ -8,14 +8,45 @@ import (
 
 type UpdateFunc[Req, Res any] func(ctx context.Context, result Res) (newTasks []Req, done bool)
 
+type stage struct {
+	wg      sync.WaitGroup
+	closeFn func()
+}
+
+type workerManager interface {
+	addStage(closeFn func()) *sync.WaitGroup
+	getContext() context.Context
+}
+
+type Controller[Req, Res any] struct {
+	ctx    context.Context
+	stages []stage
+}
+
+func NewController[Req, Res any](ctx context.Context) *Controller[Req, Res] {
+	return &Controller[Req, Res]{ctx: ctx}
+}
+
+func (c *Controller[_, _]) addStage(closeFn func()) *sync.WaitGroup {
+	c.stages = append(c.stages, stage{closeFn: closeFn})
+	return &c.stages[len(c.stages)-1].wg
+}
+
+func (c *Controller[_, _]) getContext() context.Context {
+	return c.ctx
+}
+
 func LaunchWorkers[Req, Res any](
-	ctx context.Context,
-	wg *sync.WaitGroup,
+	c workerManager,
 	numWorkers int,
 	taskFn func(ctx context.Context, req Req) Res,
 	reqCh <-chan Req,
 	resCh chan<- Res,
+	closeResCh func(),
 ) {
+	wg := c.addStage(closeResCh)
+	ctx := c.getContext()
+
 	for range numWorkers {
 		wg.Go(func() {
 			for {
@@ -37,8 +68,7 @@ func LaunchWorkers[Req, Res any](
 	}
 }
 
-func Loop[Req, Res any](
-	ctx context.Context,
+func (c *Controller[Req, Res]) Loop(
 	update UpdateFunc[Req, Res],
 	initialTasks []Req,
 	reqCh chan<- Req,
@@ -64,14 +94,14 @@ Loop:
 		}
 
 		select {
-		case <-ctx.Done():
+		case <-c.ctx.Done():
 			break Loop
 		case res, ok := <-recvCh:
 			if !ok {
 				break Loop
 			}
 
-			newTasks, done := update(ctx, res)
+			newTasks, done := update(c.ctx, res)
 			if done {
 				break Loop
 			}
@@ -83,4 +113,14 @@ Loop:
 		}
 	}
 	log.Println("[Pipeline.Loop] END")
+}
+
+func (c *Controller[_, _]) Wait() {
+	for i := range c.stages {
+		s := &c.stages[i]
+		s.wg.Wait()
+		if s.closeFn != nil {
+			s.closeFn()
+		}
+	}
 }

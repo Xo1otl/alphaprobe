@@ -2,7 +2,7 @@ package bilevel
 
 import (
 	"context"
-	"sync"
+	"log"
 
 	"alphaprobe/orchestrator/internal/pipeline"
 )
@@ -105,11 +105,12 @@ type simpleRunner[PReq, Q, D, E any] struct {
 }
 
 func (r *simpleRunner[PReq, Q, D, E]) Run(ctx context.Context, initialTasks []PReq) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	proposeReqCh := make(chan PReq, r.proposeConcurrency)
 	observeReqCh := make(chan *observeReq[Q, D], r.observeConcurrency)
 	observeResCh := make(chan *observeRes[Q, E, D], r.observeConcurrency)
-
-	var proposeWg, observeWg sync.WaitGroup
 
 	proposeTask := func(ctx context.Context, req PReq) *observeReq[Q, D] {
 		q, data := r.proposeFn(ctx, req)
@@ -121,16 +122,17 @@ func (r *simpleRunner[PReq, Q, D, E]) Run(ctx context.Context, initialTasks []PR
 		return &observeRes[Q, E, D]{Query: obsIn.Query, Evidence: evidence, Data: obsIn.Data}
 	}
 
-	pipeline.LaunchWorkers(ctx, &proposeWg, r.proposeConcurrency, proposeTask, proposeReqCh, observeReqCh)
-	pipeline.LaunchWorkers(ctx, &observeWg, r.observeConcurrency, observeTask, observeReqCh, observeResCh)
-	go func() { proposeWg.Wait(); close(observeReqCh) }()
-
 	update := func(ctx context.Context, res *observeRes[Q, E, D]) ([]PReq, bool) {
 		return r.updateFn(ctx, res.Query, res.Evidence, res.Data)
 	}
-	pipeline.Loop(ctx, update, initialTasks, proposeReqCh, observeResCh, r.maxQueueSize)
 
-	observeWg.Wait()
+	controller := pipeline.NewController[PReq, *observeRes[Q, E, D]](ctx)
+	pipeline.LaunchWorkers(controller, r.proposeConcurrency, proposeTask, proposeReqCh, observeReqCh, func() { close(observeReqCh) })
+	pipeline.LaunchWorkers(controller, r.observeConcurrency, observeTask, observeReqCh, observeResCh, nil)
+	controller.Loop(update, initialTasks, proposeReqCh, observeResCh, r.maxQueueSize)
+
+	cancel()
+	controller.Wait()
 }
 
 type adaptedRunner[PReq, POut, Q, D, E any] struct {
@@ -144,12 +146,13 @@ type adaptedRunner[PReq, POut, Q, D, E any] struct {
 }
 
 func (r *adaptedRunner[PReq, POut, Q, D, E]) Run(ctx context.Context, initialTasks []PReq) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	proposeReqCh := make(chan PReq, r.proposeConcurrency)
 	proposeResCh := make(chan proposeRes[POut, D], r.proposeConcurrency)
 	observeReqCh := make(chan *observeReq[Q, D], r.observeConcurrency)
 	observeResCh := make(chan *observeRes[Q, E, D], r.observeConcurrency)
-
-	var proposeWg, observeWg sync.WaitGroup
 
 	proposeTask := func(ctx context.Context, req PReq) proposeRes[POut, D] {
 		pout, data := r.proposeFn(ctx, req)
@@ -161,15 +164,20 @@ func (r *adaptedRunner[PReq, POut, Q, D, E]) Run(ctx context.Context, initialTas
 		return &observeRes[Q, E, D]{Query: obsReq.Query, Evidence: evidence, Data: obsReq.Data}
 	}
 
-	pipeline.LaunchWorkers(ctx, &proposeWg, r.proposeConcurrency, proposeTask, proposeReqCh, proposeResCh)
-	pipeline.LaunchWorkers(ctx, &observeWg, r.observeConcurrency, observeTask, observeReqCh, observeResCh)
-	go func() { proposeWg.Wait(); close(proposeResCh) }()
-	go r.adapterFn(proposeResCh, observeReqCh)
-
 	update := func(ctx context.Context, res *observeRes[Q, E, D]) ([]PReq, bool) {
 		return r.updateFn(ctx, res.Query, res.Evidence, res.Data)
 	}
-	pipeline.Loop(ctx, update, initialTasks, proposeReqCh, observeResCh, r.maxQueueSize)
 
-	observeWg.Wait()
+	controller := pipeline.NewController[PReq, *observeRes[Q, E, D]](ctx)
+	pipeline.LaunchWorkers(controller, r.proposeConcurrency, proposeTask, proposeReqCh, proposeResCh, func() {
+		log.Println("[adaptedRunner] Closing proposeResCh...")
+		close(proposeResCh)
+	})
+	pipeline.LaunchWorkers(controller, r.observeConcurrency, observeTask, observeReqCh, observeResCh, nil)
+	go r.adapterFn(proposeResCh, observeReqCh)
+	controller.Loop(update, initialTasks, proposeReqCh, observeResCh, r.maxQueueSize)
+
+	cancel()
+	log.Println("[adaptedRunner] Calling controller.Wait()...")
+	controller.Wait()
 }
