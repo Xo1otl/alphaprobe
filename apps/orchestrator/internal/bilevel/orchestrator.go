@@ -47,8 +47,6 @@ func Run[PReq, PRes, ORes any](
 	ctx context.Context,
 	initialTasks []PReq,
 ) {
-	ctx, cancel := context.WithCancel(ctx)
-
 	proposeReqCh := make(chan PReq, orchestrator.proposeConcurrency)
 	proposeResCh := make(chan PRes, orchestrator.proposeConcurrency)
 	observeResCh := make(chan ORes, orchestrator.observeConcurrency)
@@ -58,9 +56,8 @@ func Run[PReq, PRes, ORes any](
 	pipeline.GoWorkers(ring, orchestrator.proposeConcurrency, orchestrator.proposeFn, proposeReqCh, proposeResCh)
 	pipeline.GoWorkers(ring, orchestrator.observeConcurrency, orchestrator.observeFn, proposeResCh, observeResCh)
 	// TODO: GoControllerWithStateにしたい
-	GoControllerWithQueue(ring, orchestrator.updateFn, initialTasks, orchestrator.maxQueueSize, cancel, proposeReqCh, observeResCh)
+	GoControllerWithQueue(ring, orchestrator.updateFn, initialTasks, orchestrator.maxQueueSize, proposeReqCh, observeResCh)
 
-	ring.Loop()
 	ring.Wait()
 }
 
@@ -70,8 +67,6 @@ func RunWithFanOut[PReq, PRes, OReq, ORes any](
 	initialTasks []PReq,
 	adapterFn AdapterFunc[PRes, OReq],
 ) {
-	ctx, cancel := context.WithCancel(ctx)
-
 	proposeReqCh := make(chan PReq, orchestrator.proposeConcurrency)
 	proposeResCh := make(chan PRes, orchestrator.proposeConcurrency)
 	observeReqCh := make(chan OReq, orchestrator.observeConcurrency)
@@ -81,11 +76,10 @@ func RunWithFanOut[PReq, PRes, OReq, ORes any](
 	ring := pipeline.NewRing(ctx)
 	pipeline.GoWorkers(ring, orchestrator.proposeConcurrency, orchestrator.proposeFn, proposeReqCh, proposeResCh)
 	// TODO: 途中でfan-outするために専用のcontrollerを呼び出したい。GoControllerWithStateではなく。
-	GoControllerWithQueue(ring, adapterFn, nil, orchestrator.maxQueueSize, cancel, observeReqCh, proposeResCh)
+	GoControllerWithQueue(ring, adapterFn, nil, orchestrator.maxQueueSize, observeReqCh, proposeResCh)
 	pipeline.GoWorkers(ring, orchestrator.observeConcurrency, orchestrator.observeFn, observeReqCh, observeResCh)
 	// TODO: GoControllerWithStateにしたい
-	GoControllerWithQueue(ring, orchestrator.updateFn, initialTasks, orchestrator.maxQueueSize, cancel, proposeReqCh, observeResCh)
+	GoControllerWithQueue(ring, orchestrator.updateFn, initialTasks, orchestrator.maxQueueSize, proposeReqCh, observeResCh)
 
-	ring.Loop()
 	ring.Wait()
 }

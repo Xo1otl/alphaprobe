@@ -36,20 +36,26 @@ The `Ring` manages the lifetime of all components within the pipeline. Its respo
 ### Usage
 
 1.  Create a `Ring` instance from a `context` using `pipeline.NewRing(ctx)`.
-2.  Pass the created `Ring` instance to all `GoController` and `GoWorkers` components to start them.
-3.  Call `ring.Loop()` to start the pipeline execution and wait until it is canceled. This is a blocking call.
-4.  When the `context` is canceled, `ring.Loop()` will return. Afterward, call `ring.Wait()` to ensure all components have terminated completely.
+2.  Pass the created `Ring` instance to all `GoController` and `GoWorkers` components to start their respective goroutines.
+3.  Call `ring.Wait()` at the end of your main logic. This is a blocking call that waits until all goroutines in the pipeline have gracefully terminated.
+
+Termination can be triggered in two ways:
+- **Graceful Shutdown**: A `GoController` signals it's done, closing its output channel. This closure propagates through the pipeline, causing each subsequent component to finish its work and shut down.
+- **Forced Shutdown**: The `context` provided to the `Ring` is canceled.
 
 ```go
 ctx, cancel := context.WithCancel(context.Background())
+defer cancel() // Good practice to ensure context is always cancelled.
+
 ring := pipeline.NewRing(ctx)
 
 // ... Start GoWorkers and GoController with the ring ...
 
-// Call cancel() somewhere when a termination condition is met
+// The pipeline will now run.
+// It will stop either when a graceful shutdown is initiated by a component,
+// or when the context is cancelled.
 
-ring.Loop()  // Blocks until canceled
-ring.Wait()  // Blocks until all goroutines have finished
+ring.Wait()  // Blocks until all goroutines have finished.
 ```
 
 # GoWorkers
@@ -69,3 +75,29 @@ It receives results from a `resCh` channel, updates its state based on those res
 -   `onTaskSent`: Called immediately after a task is sent to `reqCh`, for instance, to remove it from the queue.
 
 This design centralizes state access logic within a single goroutine, making it possible to describe complex state transitions without worrying about race conditions.
+
+# Shutdown Sequence
+
+The pipeline supports two shutdown mechanisms: graceful and forced.
+
+### Graceful Shutdown
+
+A graceful shutdown is initiated when a `GoController` determines that the pipeline's work is complete.
+
+1.  A `GoController`'s `onResult` callback returns `true`.
+2.  The `GoController` immediately returns, and its `defer` statement closes its output channel (`reqCh`).
+3.  In the subsequent `GoWorkers` stage, each worker goroutine is listening on the `reqCh`. When the channel is closed, the `select` statement's read operation returns a zero value and `ok == false`. This causes the worker's processing loop to terminate.
+4.  Some workers may be in the middle of executing a task when the channel closes. The `GoWorkers` component waits for these in-flight tasks to complete.
+5.  After all worker goroutines in the stage have finished and exited, the `GoWorkers` component closes its own output channel (`resCh`).
+6.  **This closure of `resCh` serves as the shutdown signal for the next stage in the pipeline.** This process repeats, creating a chain reaction that gracefully shuts down each component in sequence.
+7.  The `ring.Wait()` call unblocks only after every component has shut down and all their goroutines have terminated.
+
+### Forced Shutdown
+
+A forced shutdown occurs when the `context` passed to `pipeline.NewRing(ctx)` is canceled.
+
+1.  The `context`'s `Done()` channel is closed.
+2.  All `select` statements within `GoController` and `GoWorkers` are listening for this cancellation.
+3.  Upon cancellation, each goroutine immediately returns, terminating its execution.
+
+This provides a mechanism to forcibly stop the entire pipeline from an external signal.

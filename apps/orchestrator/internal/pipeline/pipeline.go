@@ -14,10 +14,6 @@ func NewRing(ctx context.Context) *Ring {
 	return &Ring{ctx: ctx}
 }
 
-func (r *Ring) Loop() {
-	<-r.ctx.Done()
-}
-
 func (r *Ring) Wait() {
 	r.wg.Wait()
 }
@@ -54,33 +50,37 @@ func GoWorkers[Req, Res any](
 		})
 	}
 
-	go func() {
+	r.wg.Go(func() {
 		stageWg.Wait()
 		close(resCh)
-	}()
+	})
 }
 
 func GoController[Req, Res any](
 	r *Ring,
 	onResult func(res Res) (done bool),
 	onNextTask func() (task Req, ok bool),
-	onTaskSent func(),
+	onTaskSent func(task Req),
 	resCh <-chan Res,
 	reqCh chan<- Req,
 ) {
 	r.wg.Go(func() {
 		defer close(reqCh)
+
+		var nextTask Req
+		var hasTask bool
+		var sendCh chan<- Req
+
+		nextTask, hasTask = onNextTask()
+		if hasTask {
+			sendCh = reqCh
+		}
+
 		for {
-			nextTask, hasTask := onNextTask()
-
-			var sendCh chan<- Req
-			if hasTask {
-				sendCh = reqCh
-			}
-
 			select {
 			case <-r.ctx.Done():
 				return
+
 			case res, ok := <-resCh:
 				if !ok {
 					return
@@ -88,8 +88,21 @@ func GoController[Req, Res any](
 				if onResult(res) {
 					return
 				}
+				nextTask, hasTask = onNextTask()
+				if hasTask {
+					sendCh = reqCh
+				} else {
+					sendCh = nil
+				}
+
 			case sendCh <- nextTask:
-				onTaskSent()
+				onTaskSent(nextTask)
+				nextTask, hasTask = onNextTask()
+				if hasTask {
+					sendCh = reqCh
+				} else {
+					sendCh = nil
+				}
 			}
 		}
 	})
