@@ -56,9 +56,9 @@ func (r *Runner[PReq, PRes, OReq, ORes]) Run(ctx context.Context, initialTasks [
 	// --- Launch Ring Pipeline ---
 	ring := pipeline.NewRing(ctx)
 	pipeline.GoWorkers(ring, r.proposeConcurrency, r.proposeFn, proposeReqCh, proposeResCh)
-	pipeline.GoStatefulController(ring, r.adapterFn, nil, r.maxQueueSize, cancel, observeReqCh, proposeResCh)
+	pipeline.GoControllerWithQueue(ring, r.adapterFn, nil, r.maxQueueSize, cancel, observeReqCh, proposeResCh)
 	pipeline.GoWorkers(ring, r.observeConcurrency, r.observeFn, observeReqCh, observeResCh)
-	pipeline.GoStatefulController(ring, r.updateFn, initialTasks, r.maxQueueSize, cancel, proposeReqCh, observeResCh)
+	pipeline.GoControllerWithQueue(ring, r.updateFn, initialTasks, r.maxQueueSize, cancel, proposeReqCh, observeResCh)
 
 	ring.Loop()
 	ring.Wait()

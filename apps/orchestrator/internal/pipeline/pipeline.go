@@ -96,9 +96,9 @@ func GoController[Req, Res any](
 	})
 }
 
-// --- Stateful Controller ---
+// --- Controller With Queue---
 
-func GoStatefulController[Req, Res any](
+func GoControllerWithQueue[Req, Res any](
 	r *Ring,
 	onResult func(res Res) (newTasks []Req, done bool),
 	initialTasks []Req,
