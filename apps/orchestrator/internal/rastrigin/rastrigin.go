@@ -63,7 +63,7 @@ func NewState(
 	}
 }
 
-func (s *State) HandleResult(res ObserveResult) (done bool) {
+func (s *State) Update(res ObserveResult) (done bool) {
 	islandID := res.Metadata.IslandID
 	evaluatedChild := Individual{Gene: res.Gene, Fitness: res.Fitness}
 
@@ -80,7 +80,7 @@ func (s *State) HandleResult(res ObserveResult) (done bool) {
 	return s.EvaluationsCount >= s.TotalEvaluations
 }
 
-func (s *State) NextTask() (*Island, bool) {
+func (s *State) Next() (*Island, bool) {
 	if len(s.AvailableIslandIDs) == 0 {
 		return nil, false
 	}
@@ -89,7 +89,7 @@ func (s *State) NextTask() (*Island, bool) {
 	return s.Islands[islandID], true
 }
 
-func (s *State) TaskSent(task *Island) {
+func (s *State) Sent(task *Island) {
 	// Find the index of the task's ID in AvailableIslandIDs
 	for i, id := range s.AvailableIslandIDs {
 		if id == task.ID {
@@ -102,7 +102,7 @@ func (s *State) TaskSent(task *Island) {
 	s.PendingIslands[task.ID] = true
 }
 
-// --- Types for bilevelv2 Runner ---
+// --- Types for bilevel Runner ---
 
 type ObserveRequest struct {
 	Gene     Gene

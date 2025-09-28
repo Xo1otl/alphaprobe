@@ -50,15 +50,26 @@ import (
 ```
 
 # **My Concern**
+フレームワークの思想を明確化するために型をより限定的にし、一部の処理をRunnerがWrapする
+```go
+// B(asis): Proposeの入力
+// C(andidates): Proposeの主な出力
+// D(ata): Proposeの出力のうち、Observeで使わないもの
+// Q(uery): Observeの入力
+// E(vidence): Observeの出力
+type ProposeFunc[B, C, D any] func(ctx context.Context, basis B) C, D
+type ObserveFunc[Q, E, D any] func(ctx context.Context, query Q) E
+type FanOutFunc[C, Q any] func(candidates C) []Q
 
-Regarding the `Run` function in `controller.go`. We are currently using `ControllerWithQueue` to handle complex logic, which feels forced. All processing is concentrated in the `Update` method. I believe it would be better to decompose this logic into `HandleResult`, `NextTask`, and `TaskSent`, using `rastrigin.go` as an example.
+// State Controllerは最初と最後の入出力しか見ないのでCは不要
+type State[B, Q, E, D any] interface {
+	Update(query Q, evidence E, data D) (done bool)
+	Next() (basis B, ok bool)
+	Sent(basis B)
+}
 
-I would like to perform the following refactoring:
-1.  Create a new `State` type with decomposed responsibilities, aligned with a new bilevel.State signature.
-2.  Use a new `GoControllerWithState` in the orchestrator's `Run` function.
-
-To start, please consider how to separate the responsibilities of `rastrigin.go`'s `State.Update`. Since using a queue will no longer be mandatory, the `State` can behave more like a true state object. This would allow task generation to be moved to the `NextTask` function's responsibility, and `HandleResult` could focus solely on applying results.
+// RunnerでGoControllerに渡すwrappedObserveFnでは、渡されたobserveを呼び出しつつ最後にDataをくっつける
+```
 
 # **Your Task**
-
-Following "My Concern," please think about how to refactor `rastrigin.go`'s `State.Update` by separating its responsibilities into `HandleResult`, `NextTask`, and `TaskSent`.
+please refactor

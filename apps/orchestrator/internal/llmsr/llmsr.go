@@ -41,7 +41,7 @@ func NewState(initialSkeleton ProgramSkeleton, maxEvaluations int) *State {
 	}
 }
 
-func (s *State) HandleResult(res ObserveResult) bool {
+func (s *State) Update(res ObserveResult) bool {
 	s.EvaluationsCount++
 	newProgram := Program{
 		Skeleton: res.Query,
@@ -73,7 +73,7 @@ func (s *State) HandleResult(res ObserveResult) bool {
 	return s.EvaluationsCount >= s.MaxEvaluations
 }
 
-func (s *State) NextTask() ([]Program, bool) {
+func (s *State) Next() ([]Program, bool) {
 	// Special handling for the very first task
 	if s.EvaluationsCount == 0 && len(s.Programs) == 1 {
 		initialProgram := s.Programs[0]
@@ -107,14 +107,14 @@ func (s *State) NextTask() ([]Program, bool) {
 	return []Program{parent1, parent2}, true
 }
 
-func (s *State) TaskSent(task []Program) {
+func (s *State) Sent(task []Program) {
 	for _, p := range task {
 		s.PendingParents[p.Skeleton] = true
 	}
 	log.Printf("[Update] GENERATED new task. New PendingParents: %v", s.PendingParents)
 }
 
-// --- Types for bilevelv2 Runner ---
+// --- Types for bilevel Runner ---
 
 type ProposeResult struct {
 	Skeletons []ProgramSkeleton
