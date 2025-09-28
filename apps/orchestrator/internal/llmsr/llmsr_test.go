@@ -12,7 +12,7 @@ import (
 
 func TestLLMSRWithBilevelRunner(t *testing.T) {
 	const (
-		maxEvaluations     = 10
+		maxEvaluations     = 100
 		proposeConcurrency = 2
 		observeConcurrency = 3
 		testTimeout        = 5 * time.Second
