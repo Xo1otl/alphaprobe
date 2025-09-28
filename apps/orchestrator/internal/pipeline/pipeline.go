@@ -96,8 +96,6 @@ func GoController[Req, Res any](
 	})
 }
 
-// --- Controller With Queue---
-
 func GoControllerWithQueue[Req, Res any](
 	r *Ring,
 	onResult func(res Res) (newTasks []Req, done bool),

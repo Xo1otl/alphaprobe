@@ -13,9 +13,9 @@ type ProposeFunc[PReq, PRes any] func(ctx context.Context, req PReq) PRes
 type AdapterFunc[PRes, OReq any] = func(res PRes) ([]OReq, bool)
 type ObserveFunc[OReq, ORes any] func(ctx context.Context, req OReq) ORes
 
-// --- Runner ---
+// --- Orchestrator ---
 
-type Runner[PReq, PRes, OReq, ORes any] struct {
+type Orchestrator[PReq, PRes, OReq, ORes any] struct {
 	updateFn           UpdateFunc[ORes, PReq]
 	proposeFn          ProposeFunc[PReq, PRes]
 	adapterFn          AdapterFunc[PRes, OReq]
@@ -25,7 +25,7 @@ type Runner[PReq, PRes, OReq, ORes any] struct {
 	maxQueueSize       int
 }
 
-func NewRunner[PReq, PRes, OReq, ORes any](
+func NewOrchestrator[PReq, PRes, OReq, ORes any](
 	updateFn UpdateFunc[ORes, PReq],
 	proposeFn ProposeFunc[PReq, PRes],
 	adapterFn AdapterFunc[PRes, OReq],
@@ -33,8 +33,8 @@ func NewRunner[PReq, PRes, OReq, ORes any](
 	proposeConcurrency int,
 	observeConcurrency int,
 	maxQueueSize int,
-) *Runner[PReq, PRes, OReq, ORes] {
-	return &Runner[PReq, PRes, OReq, ORes]{
+) *Orchestrator[PReq, PRes, OReq, ORes] {
+	return &Orchestrator[PReq, PRes, OReq, ORes]{
 		updateFn:           updateFn,
 		proposeFn:          proposeFn,
 		adapterFn:          adapterFn,
@@ -45,7 +45,7 @@ func NewRunner[PReq, PRes, OReq, ORes any](
 	}
 }
 
-func (r *Runner[PReq, PRes, OReq, ORes]) Run(ctx context.Context, initialTasks []PReq) {
+func (r *Orchestrator[PReq, PRes, OReq, ORes]) Run(ctx context.Context, initialTasks []PReq) {
 	ctx, cancel := context.WithCancel(ctx)
 
 	proposeReqCh := make(chan PReq, r.proposeConcurrency)

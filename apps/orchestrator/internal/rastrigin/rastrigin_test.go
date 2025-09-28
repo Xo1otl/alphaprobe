@@ -40,7 +40,7 @@ func TestRastriginWithRunner(t *testing.T) {
 			return state.Update(res)
 		}
 
-		runner := bilevel.NewRunner(
+		orchestrator := bilevel.NewOrchestrator(
 			updateFn,
 			rastrigin.Propose,
 			rastrigin.AdapterFn,
@@ -52,7 +52,7 @@ func TestRastriginWithRunner(t *testing.T) {
 
 		fmt.Println("--- Starting Rastrigin GA with Runner ---")
 		initialTasks, _ := state.Update(rastrigin.ObserveResult{})
-		runner.Run(ctx, initialTasks)
+		orchestrator.Run(ctx, initialTasks)
 		fmt.Println("--- Rastrigin GA Finished ---")
 
 		var bestFitness rastrigin.Fitness = 1e6

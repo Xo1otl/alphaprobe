@@ -30,7 +30,7 @@ func TestLLMSRWithBilevelRunner(t *testing.T) {
 			return state.Update(res)
 		}
 
-		runner := bilevel.NewRunner(
+		orchestrator := bilevel.NewOrchestrator(
 			updateFn,
 			llmsr.Propose,
 			llmsr.AdapterFn,
@@ -42,7 +42,7 @@ func TestLLMSRWithBilevelRunner(t *testing.T) {
 
 		fmt.Println("--- Starting Mock LLMSR Search with bilevelv2 Runner ---")
 		initialTasks := state.GetInitialTask()
-		runner.Run(ctx, initialTasks)
+		orchestrator.Run(ctx, initialTasks)
 		fmt.Println("--- Mock LLMSR Search Finished ---")
 
 		fmt.Printf("Final best score: %f\n", state.BestScore)

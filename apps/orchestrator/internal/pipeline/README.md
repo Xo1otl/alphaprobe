@@ -1,18 +1,18 @@
-# 導入
+# Introduction
 
-GoのCSPモデルは強力な並行処理のプリミティブを提供するが、複数の非同期ステージを持つデータ処理パイプライン（例: `propose-observe`ループ）の構築は依然として複雑さを伴う。特に、ゴルーチンのライフサイクル管理、チャネルの安全なクローズ、複数ステージにまたがる状態の同期、そしてシステム全体の正常なシャットダウンといった処理は、定型的でありながら慎重な実装が求められる。
+In Go's CSP model, managing the lifecycle of goroutines—avoiding deadlocks, synchronizing state, and ensuring a graceful shutdown of the entire system—requires careful, albeit boilerplate, implementation.
 
-本`pipeline`パッケージは、これらの定型的な処理をカプセル化した、シンプルで合成可能なプリミティブを提供する。これにより、利用者はアプリケーション固有のコアロジックの実装に集中できる。
+This `pipeline` package provides simple, composable primitives that encapsulate these concerns. This allows users to focus on implementing their application's core logic.
 
-# 概要
+# Overview
 
-本パッケージは、イベント駆動型の並行パイプラインを構築するための、3つの主要コンポーネントを提供する。その設計は、データがチャネルを介して循環する「リング構造」モデルに基づいている。
+This package offers three main components for building concurrent pipelines, based on a "ring architecture" model where data circulates through channels.
 
--   **`Ring`**: パイプライン全体のライフサイクル（生成、実行、終了）を管理するコンテナ。
--   **`GoWorkers`**: I/Oバウンドなど、時間のかかるタスクを複数のゴルーチンで並列実行する非同期コンポーネント。
--   **`GoController`**: 状態管理やタスクの分配ロジックを担う、単一ゴルーチンで動作する同期コンポーネント。
+-   **`Ring`**: A container that manages the entire lifecycle (creation, execution, termination) of the pipeline.
+-   **`GoWorkers`**: An asynchronous component that executes time-consuming tasks, such as I/O-bound operations, in parallel across multiple goroutines.
+-   **`GoController`**: A synchronous component that runs on a single goroutine to handle state management and task distribution logic.
 
-これらのコンポーネントをチャネルで繋ぎ合わせることで、堅牢でスケーラブルなパイプラインを構築できる。
+By connecting these components with channels, you can construct a pipeline like the one shown below.
 
 ```mermaid
 graph TD
@@ -31,41 +31,41 @@ graph TD
 
 # Ring
 
-`Ring`は、パイプラインを構成する全コンポーネントの生存期間を管理する。`context`によるキャンセル処理と`sync.WaitGroup`による全ゴルーチンの正常終了の待機を責務とする。
+The `Ring` manages the lifetime of all components within the pipeline. Its responsibilities are to handle cancellation via a `context` and to wait for the graceful termination of all goroutines using a `sync.WaitGroup`.
 
-### 使い方
+### Usage
 
-1.  `context`から`pipeline.NewRing(ctx)`を用いて`Ring`インスタンスを生成する。
-2.  生成した`Ring`インスタンスを、パイプラインを構成する全ての`GoController`および`GoWorkers`に渡して起動する。
-3.  パイプラインの実行を開始し、キャンセルされるまで待機するために`ring.Loop()`を呼び出す。これはブロッキングされる。
-4.  `context`がキャンセルされると`ring.Loop()`が終了する。その後、全てのコンポーネントが完全に終了したことを保証するために`ring.Wait()`を呼び出す。
+1.  Create a `Ring` instance from a `context` using `pipeline.NewRing(ctx)`.
+2.  Pass the created `Ring` instance to all `GoController` and `GoWorkers` components to start them.
+3.  Call `ring.Loop()` to start the pipeline execution and wait until it is canceled. This is a blocking call.
+4.  When the `context` is canceled, `ring.Loop()` will return. Afterward, call `ring.Wait()` to ensure all components have terminated completely.
 
 ```go
 ctx, cancel := context.WithCancel(context.Background())
 ring := pipeline.NewRing(ctx)
 
-// ... GoWorkersとGoControllerをringとともに起動 ...
+// ... Start GoWorkers and GoController with the ring ...
 
-// どこかで終了条件が満たされたら cancel() を呼ぶ
+// Call cancel() somewhere when a termination condition is met
 
-ring.Loop()  // キャンセルされるまでブロック
-ring.Wait()  // 全てのゴルーチンが終了するまでブロック
+ring.Loop()  // Blocks until canceled
+ring.Wait()  // Blocks until all goroutines have finished
 ```
 
 # GoWorkers
 
-`GoWorkers`は、特定のタスク（`taskFn`）を、指定された並列度（`concurrency`）で実行するワーカーゴルーチン群を起動・管理する。主に、ネットワークI/Oや重い計算処理など、並列化によってスループットを向上させたい非同期処理に用いる。
+`GoWorkers` launches and manages a group of worker goroutines that execute a specific task (`taskFn`) with a specified degree of parallelism (`concurrency`). It is primarily used for asynchronous operations where parallelization can improve throughput, such as network I/O or heavy computations.
 
-`reqCh`チャネルからタスクを受け取り、`taskFn`を実行した結果を`resCh`チャネルへ送信する。`Ring`の`context`がキャンセルされると、全てのワーカーは安全に終了する。また、ワーカー群が全て終了した後に`resCh`を自動的にクローズする。
+It receives tasks from the `reqCh` channel, executes the `taskFn`, and sends the results to the `resCh` channel. When the `Ring`'s `context` is canceled, all workers terminate safely. The `resCh` is closed after all worker goroutines have finished.
 
 # GoController
 
-`GoController`は、パイプラインの状態管理やタスクのルーティングといった、同期的な処理を担うコンポーネントである。内部で単一のゴルーチンを起動し、その中で全ての処理を行うため、**Mutexなどのロック機構なしで安全に状態を管理できる**（Stateful Goroutine）。
+`GoController` is a component responsible for synchronous processing, such as state management and task routing within the pipeline. It operates on a single internal goroutine, allowing it to **safely manage state without the need for mutexes or other locking mechanisms**.
 
-`resCh`チャネルから結果を受け取り、その結果に基づいて状態を更新し、次のタスクを`reqCh`チャネルへ送信する。この一連の振る舞いは、以下の3つのコールバック関数によって定義される。
+It receives results from a `resCh` channel, updates its state based on those results, and sends new tasks to a `reqCh` channel. This behavior is defined by the following three callback functions:
 
--   `onResult`: `resCh`から受信した結果を処理する。状態更新や、次に実行すべきタスクのキューへの追加、終了条件の判定などを行う。
--   `onNextTask`: タスクキューから次に`reqCh`へ送信すべきタスクを取り出す。
--   `onTaskSent`: タスクが`reqCh`へ送信された直後に呼び出され、タスクキューからの削除などを行う。
+-   `onResult`: Processes a result received from `resCh`. This can involve updating state, adding new tasks to a queue, or checking for termination conditions.
+-   `onNextTask`: Retrieves the next task from a queue to be sent to `reqCh`.
+-   `onTaskSent`: Called immediately after a task is sent to `reqCh`, for instance, to remove it from the queue.
 
-この設計により、状態アクセスのロジックが単一のゴルーチンに集約され、競合状態の心配なく複雑な状態遷移を記述できる。
+This design centralizes state access logic within a single goroutine, making it possible to describe complex state transitions without worrying about race conditions.
