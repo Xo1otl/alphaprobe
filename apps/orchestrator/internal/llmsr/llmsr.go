@@ -41,18 +41,7 @@ func NewState(initialSkeleton ProgramSkeleton, maxEvaluations int) *State {
 	}
 }
 
-func (s *State) GetInitialTask() [][]Program {
-	if len(s.Programs) != 1 || s.EvaluationsCount != 0 {
-		return nil // Should only be called at the start.
-	}
-
-	initialProgram := s.Programs[0]
-	s.PendingParents[initialProgram.Skeleton] = true
-	nextTask := []Program{initialProgram, initialProgram}
-	return [][]Program{nextTask}
-}
-
-func (s *State) Update(res ObserveResult) ([][]Program, bool) {
+func (s *State) HandleResult(res ObserveResult) bool {
 	s.EvaluationsCount++
 	newProgram := Program{
 		Skeleton: res.Query,
@@ -81,9 +70,14 @@ func (s *State) Update(res ObserveResult) ([][]Program, bool) {
 	}
 	log.Printf("[Update] PendingParents AFTER delete: %v", s.PendingParents)
 
-	if s.EvaluationsCount >= s.MaxEvaluations {
-		log.Println("[Update] Max evaluations reached. Terminating.")
-		return nil, true
+	return s.EvaluationsCount >= s.MaxEvaluations
+}
+
+func (s *State) NextTask() ([]Program, bool) {
+	// Special handling for the very first task
+	if s.EvaluationsCount == 0 && len(s.Programs) == 1 {
+		initialProgram := s.Programs[0]
+		return []Program{initialProgram, initialProgram}, true
 	}
 
 	if len(s.PendingParents) > 0 {
@@ -101,7 +95,7 @@ func (s *State) Update(res ObserveResult) ([][]Program, bool) {
 
 	if len(availablePrograms) < 2 {
 		log.Println("[Update] Not enough available programs to create a new task. Terminating.")
-		return nil, true
+		return nil, false
 	}
 
 	rand.Shuffle(len(availablePrograms), func(i, j int) {
@@ -109,12 +103,15 @@ func (s *State) Update(res ObserveResult) ([][]Program, bool) {
 	})
 	parent1 := availablePrograms[0]
 	parent2 := availablePrograms[1]
-	s.PendingParents[parent1.Skeleton] = true
-	s.PendingParents[parent2.Skeleton] = true
-	log.Printf("[Update] GENERATED new task. New PendingParents: %v", s.PendingParents)
 
-	nextTask := []Program{parent1, parent2}
-	return [][]Program{nextTask}, false
+	return []Program{parent1, parent2}, true
+}
+
+func (s *State) TaskSent(task []Program) {
+	for _, p := range task {
+		s.PendingParents[p.Skeleton] = true
+	}
+	log.Printf("[Update] GENERATED new task. New PendingParents: %v", s.PendingParents)
 }
 
 // --- Types for bilevelv2 Runner ---
@@ -158,7 +155,7 @@ func Propose(ctx context.Context, parents []Program) ProposeResult {
 	}
 }
 
-func AdapterFn(pRes ProposeResult) ([]ObserveRequest, bool) {
+func FanOut(pRes ProposeResult) []ObserveRequest {
 	reqs := make([]ObserveRequest, len(pRes.Skeletons))
 	for i, s := range pRes.Skeletons {
 		reqs[i] = ObserveRequest{
@@ -166,7 +163,7 @@ func AdapterFn(pRes ProposeResult) ([]ObserveRequest, bool) {
 			Metadata: pRes.Metadata,
 		}
 	}
-	return reqs, false
+	return reqs
 }
 
 func Observe(ctx context.Context, req ObserveRequest) ObserveResult {

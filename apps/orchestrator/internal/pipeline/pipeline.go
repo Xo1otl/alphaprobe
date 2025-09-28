@@ -107,3 +107,32 @@ func GoController[Req, Res any](
 		}
 	})
 }
+
+func GoFanOutController[Res, Req any](
+	r *Ring,
+	fanOutFn func(res Res) []Req,
+	resCh <-chan Res,
+	reqCh chan<- Req,
+) {
+	r.wg.Go(func() {
+		defer close(reqCh)
+		for {
+			select {
+			case <-r.ctx.Done():
+				return
+			case res, ok := <-resCh:
+				if !ok {
+					return
+				}
+				reqs := fanOutFn(res)
+				for _, req := range reqs {
+					select {
+					case <-r.ctx.Done():
+						return
+					case reqCh <- req:
+					}
+				}
+			}
+		}
+	})
+}

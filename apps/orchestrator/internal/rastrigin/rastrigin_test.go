@@ -19,7 +19,6 @@ func TestRastriginWithRunner(t *testing.T) {
 		migrationSize      = 5
 		proposeConcurrency = 5
 		observeConcurrency = 5
-		maxQueueSize       = 100
 		testTimeout        = 5 * time.Second
 	)
 
@@ -36,22 +35,15 @@ func TestRastriginWithRunner(t *testing.T) {
 			migrationSize,
 		)
 
-		updateFn := func(res rastrigin.ObserveResult) ([]*rastrigin.Island, bool) {
-			return state.Update(res)
-		}
-
 		orchestrator := bilevel.NewOrchestrator(
-			updateFn,
 			rastrigin.Propose,
 			rastrigin.Observe,
 			proposeConcurrency,
 			observeConcurrency,
-			maxQueueSize,
 		)
 
 		fmt.Println("--- Starting Rastrigin GA with Runner ---")
-		initialTasks, _ := state.Update(rastrigin.ObserveResult{})
-		bilevel.Run(orchestrator, ctx, initialTasks)
+		bilevel.Run(orchestrator, ctx, state)
 		fmt.Println("--- Rastrigin GA Finished ---")
 
 		var bestFitness rastrigin.Fitness = 1e6

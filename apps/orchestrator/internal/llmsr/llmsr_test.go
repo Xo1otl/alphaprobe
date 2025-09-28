@@ -15,7 +15,6 @@ func TestLLMSRWithBilevelRunner(t *testing.T) {
 		maxEvaluations     = 10
 		proposeConcurrency = 2
 		observeConcurrency = 3
-		maxQueueSize       = 10
 		testTimeout        = 5 * time.Second
 	)
 
@@ -26,22 +25,15 @@ func TestLLMSRWithBilevelRunner(t *testing.T) {
 	go func() {
 		state := llmsr.NewState("def initial_program(x): return x", maxEvaluations)
 
-		updateFn := func(res llmsr.ObserveResult) ([][]llmsr.Program, bool) {
-			return state.Update(res)
-		}
-
 		orchestrator := bilevel.NewOrchestrator(
-			updateFn,
 			llmsr.Propose,
 			llmsr.Observe,
 			proposeConcurrency,
 			observeConcurrency,
-			maxQueueSize,
 		)
 
 		fmt.Println("--- Starting Mock LLMSR Search with bilevelv2 Runner ---")
-		initialTasks := state.GetInitialTask()
-		bilevel.RunWithFanOut(orchestrator, ctx, initialTasks, llmsr.AdapterFn)
+		bilevel.RunWithFanOut(orchestrator, ctx, state, llmsr.FanOut)
 		fmt.Println("--- Mock LLMSR Search Finished ---")
 
 		fmt.Printf("Final best score: %f\n", state.BestScore)

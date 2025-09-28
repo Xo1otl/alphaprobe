@@ -63,38 +63,43 @@ func NewState(
 	}
 }
 
-func (s *State) Update(res ObserveResult) ([]*Island, bool) {
-	if res.Gene != nil {
-		islandID := res.Metadata.IslandID
-		evaluatedChild := Individual{Gene: res.Gene, Fitness: res.Fitness}
+func (s *State) HandleResult(res ObserveResult) (done bool) {
+	islandID := res.Metadata.IslandID
+	evaluatedChild := Individual{Gene: res.Gene, Fitness: res.Fitness}
 
-		delete(s.PendingIslands, islandID)
-		s.EvaluationsCount++
-		s.AvailableIslandIDs = append(s.AvailableIslandIDs, islandID)
+	delete(s.PendingIslands, islandID)
+	s.EvaluationsCount++
+	s.AvailableIslandIDs = append(s.AvailableIslandIDs, islandID)
 
-		incorporate(s.Islands[islandID], []Individual{evaluatedChild})
+	incorporate(s.Islands[islandID], []Individual{evaluatedChild})
 
-		if s.EvaluationsCount > 0 && s.EvaluationsCount%s.MigrationInterval == 0 {
-			migrate(s.Islands, s.MigrationSize)
-		}
+	if s.EvaluationsCount > 0 && s.EvaluationsCount%s.MigrationInterval == 0 {
+		migrate(s.Islands, s.MigrationSize)
 	}
 
-	if s.EvaluationsCount >= s.TotalEvaluations {
-		return nil, true
-	}
+	return s.EvaluationsCount >= s.TotalEvaluations
+}
 
+func (s *State) NextTask() (*Island, bool) {
 	if len(s.AvailableIslandIDs) == 0 {
 		return nil, false
 	}
-
 	randIndex := rand.Intn(len(s.AvailableIslandIDs))
 	islandID := s.AvailableIslandIDs[randIndex]
+	return s.Islands[islandID], true
+}
 
-	s.AvailableIslandIDs = append(s.AvailableIslandIDs[:randIndex], s.AvailableIslandIDs[randIndex+1:]...)
-	s.PendingIslands[islandID] = true
-
-	nextTask := s.Islands[islandID]
-	return []*Island{nextTask}, false
+func (s *State) TaskSent(task *Island) {
+	// Find the index of the task's ID in AvailableIslandIDs
+	for i, id := range s.AvailableIslandIDs {
+		if id == task.ID {
+			// Remove the ID from AvailableIslandIDs
+			s.AvailableIslandIDs = append(s.AvailableIslandIDs[:i], s.AvailableIslandIDs[i+1:]...)
+			break
+		}
+	}
+	// Add the ID to PendingIslands
+	s.PendingIslands[task.ID] = true
 }
 
 // --- Types for bilevelv2 Runner ---
