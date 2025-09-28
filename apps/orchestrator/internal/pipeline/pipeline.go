@@ -6,16 +6,16 @@ import (
 )
 
 type Ring struct {
-	ctx context.Context
-	wg  sync.WaitGroup
+	Ctx context.Context
+	Wg  sync.WaitGroup
 }
 
 func NewRing(ctx context.Context) *Ring {
-	return &Ring{ctx: ctx}
+	return &Ring{Ctx: ctx}
 }
 
 func (r *Ring) Wait() {
-	r.wg.Wait()
+	r.Wg.Wait()
 }
 
 func GoWorkers[Req, Res any](
@@ -29,19 +29,19 @@ func GoWorkers[Req, Res any](
 	stageWg.Add(concurrency)
 
 	for range concurrency {
-		r.wg.Go(func() {
+		r.Wg.Go(func() {
 			defer stageWg.Done()
 			for {
 				select {
-				case <-r.ctx.Done():
+				case <-r.Ctx.Done():
 					return
 				case req, ok := <-reqCh:
 					if !ok {
 						return
 					}
-					result := taskFn(r.ctx, req)
+					result := taskFn(r.Ctx, req)
 					select {
-					case <-r.ctx.Done():
+					case <-r.Ctx.Done():
 						return
 					case resCh <- result:
 					}
@@ -50,7 +50,7 @@ func GoWorkers[Req, Res any](
 		})
 	}
 
-	r.wg.Go(func() {
+	r.Wg.Go(func() {
 		stageWg.Wait()
 		close(resCh)
 	})
@@ -64,7 +64,7 @@ func GoController[Req, Res any](
 	resCh <-chan Res,
 	reqCh chan<- Req,
 ) {
-	r.wg.Go(func() {
+	r.Wg.Go(func() {
 		defer close(reqCh)
 
 		var nextTask Req
@@ -78,7 +78,7 @@ func GoController[Req, Res any](
 
 		for {
 			select {
-			case <-r.ctx.Done():
+			case <-r.Ctx.Done():
 				return
 
 			case res, ok := <-resCh:
@@ -102,35 +102,6 @@ func GoController[Req, Res any](
 					sendCh = reqCh
 				} else {
 					sendCh = nil
-				}
-			}
-		}
-	})
-}
-
-func GoFanOutController[Res, Req any](
-	r *Ring,
-	fanOutFn func(res Res) []Req,
-	resCh <-chan Res,
-	reqCh chan<- Req,
-) {
-	r.wg.Go(func() {
-		defer close(reqCh)
-		for {
-			select {
-			case <-r.ctx.Done():
-				return
-			case res, ok := <-resCh:
-				if !ok {
-					return
-				}
-				reqs := fanOutFn(res)
-				for _, req := range reqs {
-					select {
-					case <-r.ctx.Done():
-						return
-					case reqCh <- req:
-					}
 				}
 			}
 		}

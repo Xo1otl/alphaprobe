@@ -44,7 +44,6 @@ func Run[PReq, PRes, ORes any](
 	proposeResCh := make(chan PRes, orchestrator.proposeConcurrency)
 	observeResCh := make(chan ORes, orchestrator.observeConcurrency)
 
-	// --- Launch Ring Pipeline ---
 	ring := pipeline.NewRing(ctx)
 	pipeline.GoWorkers(ring, orchestrator.proposeConcurrency, orchestrator.proposeFn, proposeReqCh, proposeResCh)
 	pipeline.GoWorkers(ring, orchestrator.observeConcurrency, orchestrator.observeFn, proposeResCh, observeResCh)
@@ -64,10 +63,9 @@ func RunWithFanOut[PReq, PRes, OReq, ORes any](
 	observeReqCh := make(chan OReq, orchestrator.observeConcurrency)
 	observeResCh := make(chan ORes, orchestrator.observeConcurrency)
 
-	// --- Launch Ring Pipeline ---
 	ring := pipeline.NewRing(ctx)
 	pipeline.GoWorkers(ring, orchestrator.proposeConcurrency, orchestrator.proposeFn, proposeReqCh, proposeResCh)
-	pipeline.GoFanOutController(ring, fanOutFn, proposeResCh, observeReqCh)
+	GoFanOutController(ring, fanOutFn, proposeResCh, observeReqCh)
 	pipeline.GoWorkers(ring, orchestrator.observeConcurrency, orchestrator.observeFn, observeReqCh, observeResCh)
 	GoControllerWithState(ring, state, proposeReqCh, observeResCh)
 
