@@ -50,7 +50,23 @@ import (
 ```
 
 # My Concern
-* bilevel.orchestratorがGoControllerWithQueueでハードコードされており、llmsrはstate.Updateの中ですべての管理を集中させる必要性が生まれている
-* GoControllerWithQueueではなく素のGoControllerを使い、onRequest/onNextTask/onTaskSentに分離する方がうまく作れるのかな
+proposeResを直接observeReqに転送するだけでよい場合もある。
+rastrigin.go見てほしい。
 
-# Your Task
+# TODO
+OrchestratorのメソッドレシーバとしてRunを作っていると、Orchestratorの型引数でPResとOReqを異なる型として受け取った時点で、内部のメソッドではRunとRunWithAdapterの二種類を用意するのが難しい、goではstructで決定した型がそのままメソッドの型として確定するので、structでPResとOReqが異なるものを取れるようにしている時点でメソッドから一致するか判定する方法が存在しない。
+
+それよりも、OrchestratorをRunが受け取るようにして、使う側では
+```
+o := bilevel.NewOrchestrator(...)
+bilevel.Run(o)
+```
+とか
+```
+o := bilevel.NewOrchestrator(...)
+bilevel.RunWithAdapter(o)
+```
+とかにするのはどうなんだろう.
+
+Runの部分でPResとOReqの型が一致してるOrchestratorだけが受け取れるようになって、自然に両方対応できたりしないかな。
+型システム的に実現可能かどうか、厳密に検討してみてほしい

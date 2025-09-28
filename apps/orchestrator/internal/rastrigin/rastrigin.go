@@ -99,11 +99,6 @@ func (s *State) Update(res ObserveResult) ([]*Island, bool) {
 
 // --- Types for bilevelv2 Runner ---
 
-type ProposeResult struct {
-	Gene     Gene
-	Metadata Metadata
-}
-
 type ObserveRequest struct {
 	Gene     Gene
 	Metadata Metadata
@@ -117,7 +112,7 @@ type ObserveResult struct {
 
 // --- Pipeline Functions ---
 
-func Propose(ctx context.Context, island *Island) ProposeResult {
+func Propose(ctx context.Context, island *Island) ObserveRequest {
 	pop := island.Population
 	tournament := func() Individual {
 		best := pop[rand.Intn(len(pop))]
@@ -146,11 +141,7 @@ func Propose(ctx context.Context, island *Island) ProposeResult {
 		}
 	}
 
-	return ProposeResult{Gene: childGene, Metadata: Metadata{IslandID: island.ID}}
-}
-
-func AdapterFn(pRes ProposeResult) ([]ObserveRequest, bool) {
-	return []ObserveRequest{{Gene: pRes.Gene, Metadata: pRes.Metadata}}, false
+	return ObserveRequest{Gene: childGene, Metadata: Metadata{IslandID: island.ID}}
 }
 
 func Observe(ctx context.Context, req ObserveRequest) ObserveResult {

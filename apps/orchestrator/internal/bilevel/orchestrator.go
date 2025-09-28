@@ -18,7 +18,6 @@ type ObserveFunc[OReq, ORes any] func(ctx context.Context, req OReq) ORes
 type Orchestrator[PReq, PRes, OReq, ORes any] struct {
 	updateFn           UpdateFunc[ORes, PReq]
 	proposeFn          ProposeFunc[PReq, PRes]
-	adapterFn          AdapterFunc[PRes, OReq]
 	observeFn          ObserveFunc[OReq, ORes]
 	proposeConcurrency int
 	observeConcurrency int
@@ -28,7 +27,6 @@ type Orchestrator[PReq, PRes, OReq, ORes any] struct {
 func NewOrchestrator[PReq, PRes, OReq, ORes any](
 	updateFn UpdateFunc[ORes, PReq],
 	proposeFn ProposeFunc[PReq, PRes],
-	adapterFn AdapterFunc[PRes, OReq],
 	observeFn ObserveFunc[OReq, ORes],
 	proposeConcurrency int,
 	observeConcurrency int,
@@ -37,7 +35,6 @@ func NewOrchestrator[PReq, PRes, OReq, ORes any](
 	return &Orchestrator[PReq, PRes, OReq, ORes]{
 		updateFn:           updateFn,
 		proposeFn:          proposeFn,
-		adapterFn:          adapterFn,
 		observeFn:          observeFn,
 		proposeConcurrency: proposeConcurrency,
 		observeConcurrency: observeConcurrency,
@@ -45,20 +42,46 @@ func NewOrchestrator[PReq, PRes, OReq, ORes any](
 	}
 }
 
-func (r *Orchestrator[PReq, PRes, OReq, ORes]) Run(ctx context.Context, initialTasks []PReq) {
+func Run[PReq, PRes, ORes any](
+	orchestrator *Orchestrator[PReq, PRes, PRes, ORes],
+	ctx context.Context,
+	initialTasks []PReq,
+) {
 	ctx, cancel := context.WithCancel(ctx)
 
-	proposeReqCh := make(chan PReq, r.proposeConcurrency)
-	proposeResCh := make(chan PRes, r.proposeConcurrency)
-	observeReqCh := make(chan OReq, r.observeConcurrency)
-	observeResCh := make(chan ORes, r.observeConcurrency)
+	proposeReqCh := make(chan PReq, orchestrator.proposeConcurrency)
+	proposeResCh := make(chan PRes, orchestrator.proposeConcurrency)
+	observeResCh := make(chan ORes, orchestrator.observeConcurrency)
 
 	// --- Launch Ring Pipeline ---
 	ring := pipeline.NewRing(ctx)
-	pipeline.GoWorkers(ring, r.proposeConcurrency, r.proposeFn, proposeReqCh, proposeResCh)
-	pipeline.GoControllerWithQueue(ring, r.adapterFn, nil, r.maxQueueSize, cancel, observeReqCh, proposeResCh)
-	pipeline.GoWorkers(ring, r.observeConcurrency, r.observeFn, observeReqCh, observeResCh)
-	pipeline.GoControllerWithQueue(ring, r.updateFn, initialTasks, r.maxQueueSize, cancel, proposeReqCh, observeResCh)
+	pipeline.GoWorkers(ring, orchestrator.proposeConcurrency, orchestrator.proposeFn, proposeReqCh, proposeResCh)
+	pipeline.GoWorkers(ring, orchestrator.observeConcurrency, orchestrator.observeFn, proposeResCh, observeResCh)
+	pipeline.GoControllerWithQueue(ring, orchestrator.updateFn, initialTasks, orchestrator.maxQueueSize, cancel, proposeReqCh, observeResCh)
+
+	ring.Loop()
+	ring.Wait()
+}
+
+func RunWithAdapter[PReq, PRes, OReq, ORes any](
+	orchestrator *Orchestrator[PReq, PRes, OReq, ORes],
+	ctx context.Context,
+	initialTasks []PReq,
+	adapterFn AdapterFunc[PRes, OReq],
+) {
+	ctx, cancel := context.WithCancel(ctx)
+
+	proposeReqCh := make(chan PReq, orchestrator.proposeConcurrency)
+	proposeResCh := make(chan PRes, orchestrator.proposeConcurrency)
+	observeReqCh := make(chan OReq, orchestrator.observeConcurrency)
+	observeResCh := make(chan ORes, orchestrator.observeConcurrency)
+
+	// --- Launch Ring Pipeline ---
+	ring := pipeline.NewRing(ctx)
+	pipeline.GoWorkers(ring, orchestrator.proposeConcurrency, orchestrator.proposeFn, proposeReqCh, proposeResCh)
+	pipeline.GoControllerWithQueue(ring, adapterFn, nil, orchestrator.maxQueueSize, cancel, observeReqCh, proposeResCh)
+	pipeline.GoWorkers(ring, orchestrator.observeConcurrency, orchestrator.observeFn, observeReqCh, observeResCh)
+	pipeline.GoControllerWithQueue(ring, orchestrator.updateFn, initialTasks, orchestrator.maxQueueSize, cancel, proposeReqCh, observeResCh)
 
 	ring.Loop()
 	ring.Wait()
