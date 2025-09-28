@@ -50,23 +50,13 @@ import (
 ```
 
 # My Concern
-proposeResを直接observeReqに転送するだけでよい場合もある。
-rastrigin.go見てほしい。
+* llmsr.goのUpdate関数の在り方について考え直したい
+* GoControllerWithStateを作る。これは、GoControllerのonRequest/onNextTask/onTaskSentに渡される、Update/NextTask/<後処理の関数名>を持つState interfaceを用いて実行する。State Interfaceの実装は外部に委譲し、queueも持たず、maxQueueSizeという引数は不要となる
+* Runでは、新しく用意したGoControllerWithStateのみを使用し、Update/NextTask/<関数名未定>を実装した、StateInferfaceの実装を受け取る
+* **Updateという一つだけの関数になるわけではなく、三つに分解でき、queueの使用も強制でなくなったことから、llmsr.Updateの処理を論理的に分解することが可能となる**
+* GoCtonrollerWithQueueからはinitialTasksの引数を削除できそう
+* RunWithAdapterはRunWithFanOut(..., adapterFn, ...)に関数名を変更し、onResultに渡すadapterFnだけ取れればよい
 
-# TODO
-OrchestratorのメソッドレシーバとしてRunを作っていると、Orchestratorの型引数でPResとOReqを異なる型として受け取った時点で、内部のメソッドではRunとRunWithAdapterの二種類を用意するのが難しい、goではstructで決定した型がそのままメソッドの型として確定するので、structでPResとOReqが異なるものを取れるようにしている時点でメソッドから一致するか判定する方法が存在しない。
-
-それよりも、OrchestratorをRunが受け取るようにして、使う側では
-```
-o := bilevel.NewOrchestrator(...)
-bilevel.Run(o)
-```
-とか
-```
-o := bilevel.NewOrchestrator(...)
-bilevel.RunWithAdapter(o)
-```
-とかにするのはどうなんだろう.
-
-Runの部分でPResとOReqの型が一致してるOrchestratorだけが受け取れるようになって、自然に両方対応できたりしないかな。
-型システム的に実現可能かどうか、厳密に検討してみてほしい
+# Your Task
+MyConcernにあるようなリファクタリングを考えている。
+コードのTODOに書いてある内容や、MyConcernを踏まえて、**まずGoControllerWithStateを導入することによりllmsr.Updateがどのように分離されてシンプルになるか**検討してみてほしい。fan-out adapterのためのcontrollerや、そのほかの修正は検討ができてから考える。

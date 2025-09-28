@@ -2,7 +2,6 @@ package pipeline
 
 import (
 	"context"
-	"log"
 	"sync"
 )
 
@@ -94,46 +93,4 @@ func GoController[Req, Res any](
 			}
 		}
 	})
-}
-
-func GoControllerWithQueue[Req, Res any](
-	r *Ring,
-	onResult func(res Res) (newTasks []Req, done bool),
-	initialTasks []Req,
-	maxQueueSize int,
-	cancel func(),
-	reqCh chan<- Req,
-	resCh <-chan Res,
-) {
-	taskQueue := make([]Req, 0, maxQueueSize)
-	taskQueue = append(taskQueue, initialTasks...)
-
-	onResultWrapper := func(res Res) (done bool) {
-		newTasks, done := onResult(res)
-		if done {
-			cancel()
-			return true
-		}
-		taskQueue = append(taskQueue, newTasks...)
-		if len(taskQueue) > maxQueueSize {
-			// TODO: better error handling
-			log.Printf("task queue overflow")
-			cancel()
-			return true
-		}
-		return false
-	}
-
-	onNextTask := func() (task Req, ok bool) {
-		if len(taskQueue) == 0 {
-			return task, false
-		}
-		return taskQueue[0], true
-	}
-
-	onTaskSent := func() {
-		taskQueue = taskQueue[1:]
-	}
-
-	GoController(r, onResultWrapper, onNextTask, onTaskSent, resCh, reqCh)
 }

@@ -57,13 +57,14 @@ func Run[PReq, PRes, ORes any](
 	ring := pipeline.NewRing(ctx)
 	pipeline.GoWorkers(ring, orchestrator.proposeConcurrency, orchestrator.proposeFn, proposeReqCh, proposeResCh)
 	pipeline.GoWorkers(ring, orchestrator.observeConcurrency, orchestrator.observeFn, proposeResCh, observeResCh)
-	pipeline.GoControllerWithQueue(ring, orchestrator.updateFn, initialTasks, orchestrator.maxQueueSize, cancel, proposeReqCh, observeResCh)
+	// TODO: GoControllerWithStateにしたい
+	GoControllerWithQueue(ring, orchestrator.updateFn, initialTasks, orchestrator.maxQueueSize, cancel, proposeReqCh, observeResCh)
 
 	ring.Loop()
 	ring.Wait()
 }
 
-func RunWithAdapter[PReq, PRes, OReq, ORes any](
+func RunWithFanOut[PReq, PRes, OReq, ORes any](
 	orchestrator *Orchestrator[PReq, PRes, OReq, ORes],
 	ctx context.Context,
 	initialTasks []PReq,
@@ -79,9 +80,11 @@ func RunWithAdapter[PReq, PRes, OReq, ORes any](
 	// --- Launch Ring Pipeline ---
 	ring := pipeline.NewRing(ctx)
 	pipeline.GoWorkers(ring, orchestrator.proposeConcurrency, orchestrator.proposeFn, proposeReqCh, proposeResCh)
-	pipeline.GoControllerWithQueue(ring, adapterFn, nil, orchestrator.maxQueueSize, cancel, observeReqCh, proposeResCh)
+	// TODO: 途中でfan-outするために専用のcontrollerを呼び出したい。GoControllerWithStateではなく。
+	GoControllerWithQueue(ring, adapterFn, nil, orchestrator.maxQueueSize, cancel, observeReqCh, proposeResCh)
 	pipeline.GoWorkers(ring, orchestrator.observeConcurrency, orchestrator.observeFn, observeReqCh, observeResCh)
-	pipeline.GoControllerWithQueue(ring, orchestrator.updateFn, initialTasks, orchestrator.maxQueueSize, cancel, proposeReqCh, observeResCh)
+	// TODO: GoControllerWithStateにしたい
+	GoControllerWithQueue(ring, orchestrator.updateFn, initialTasks, orchestrator.maxQueueSize, cancel, proposeReqCh, observeResCh)
 
 	ring.Loop()
 	ring.Wait()
