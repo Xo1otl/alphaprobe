@@ -64,6 +64,4 @@ bilevel.Run(orchestrator, ctx, state)
 * Write idiomatic Go!
 
 # Question
-llmsr/state.goを見て欲しい、errorハンドリングとloggingを追加したいです.
-let it crashで、logには残すけどプロセスは終了しない感じがいいかなぁ.
-observeとproposeはmockであり、ここであえてエラーを返して動作チェックとかが可能.
+Fully reproduce the calculations in llmsr/README.md in state.go.

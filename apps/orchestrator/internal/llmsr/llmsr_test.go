@@ -12,7 +12,7 @@ import (
 
 func TestRunLLMSR_Deterministic(t *testing.T) {
 	const (
-		maxEvaluations     = 100
+		maxEvaluations     = 1000
 		numIslands         = 4
 		migrationInterval  = 25
 		proposeConcurrency = 2
@@ -37,15 +37,12 @@ func TestRunLLMSR_Deterministic(t *testing.T) {
 		observeConcurrency,
 	)
 
-	// Run the GA loop using the standard bilevel orchestrator with the adapter.
 	bilevel.RunWithAdapter(orchestrator, ctx, state, adapter)
 
-	// Check for timeout, which would indicate a deadlock or a hang.
 	if ctx.Err() == context.DeadlineExceeded {
 		t.Fatal("Test timed out, indicating a potential deadlock.")
 	}
 
-	// Assertions to verify the run.
 	assert.True(t, state.EvaluationsCount >= maxEvaluations, "Should have completed at least the specified number of evaluations")
 	assert.Less(t, state.getBestScore(), float64(initialScore), "The final best score should be better (less) than the initial score")
 

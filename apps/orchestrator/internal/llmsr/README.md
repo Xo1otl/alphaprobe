@@ -1,6 +1,6 @@
 # Overview
 
-`llmsr` uses an Island Model Genetic Algorithm (GA) **operational principles** to discover scientific equations. The architecture evolves a population of **equation skeletons** across multiple islands, combining LLM-based structure generation with numerical optimization.
+`llmsr` uses an Island Model Genetic Algorithm (GA) to discover scientific equations. The architecture's **operational principles** evolve a population of **equation skeletons** across multiple islands, combining LLM-based structure generation with numerical optimization.
 
 # The Equation Skeleton
 
@@ -16,7 +16,32 @@ The system periodically eliminates the lower-performing half of the islands, bas
 
 Each island operates on a `sample -> propose -> observe -> propagate` cycle. Skeletons that produce identical scores are grouped into clusters.
 
-1.  **Sample**: One skeleton is selected from each cluster. From this pool, a subset of parents is chosen.
-2.  **Propose (Skeleton Generation)**: An LLM generates new equation skeletons based on the parent skeletons.
+1.  **Sample (Parent Selection)**: To select a single parent, a three-step process is followed. This process is repeated until the required number of parents are gathered.
+    1.  **Random Island Selection**: An island is chosen uniformly at random from the entire population of islands.
+    2.  **Cluster Selection (Score-based)**: From the chosen island, a cluster `i` is selected with a probability `Pᵢ` calculated using Boltzmann selection:
+        $$
+        P_i = \frac{\exp(s_i/T_c)}{\sum_j \exp(s_j/T_c)}
+        $$
+        -   `sᵢ`: The evaluation score of cluster `i`.
+        -   `T_c`: A temperature parameter that decreases over time to shift selection from exploration to exploitation (simulated annealing). It is calculated as: `T_c = T₀(1 - (u mod N) / N)`.
+            -   `T₀`: The initial temperature.
+            -   `u`: The total number of individuals evaluated on the island so far.
+            -   `N`: The total number of individuals to be evaluated before the island is considered for replacement.
+    3.  **Skeleton Selection (Length-based)**: From the chosen cluster, a final skeleton `fᵢ` is selected with a probability proportional to the following value, which favors shorter programs:
+        $$
+        \propto \exp(-\hat{l}_i/T_p)
+        $$
+        -   `T_p`: A temperature parameter, typically fixed to `1`.
+        -   `l̂ᵢ`: The normalized program length of the skeleton, calculated as:
+            $$
+            \hat{l}_i = \frac{l_i - \min l}{\max l - \min l + \epsilon}
+            $$
+            -   `lᵢ`: The program length of skeleton `fᵢ`.
+            -   `min l` and `max l`: The minimum and maximum program lengths of skeletons within the selected cluster.
+            -   `ε`: A small constant (e.g., `1e-6`) to prevent division by zero.
+
+2.  **Propose (Skeleton Generation)**: An LLM generates new equation skeletons based on the parent skeletons selected in the Sample step.
+
 3.  **Observe (Parameter Optimization)**: A numerical optimizer (e.g., BFGS) determines the coefficient values for a given skeleton by minimizing error against a dataset or solving differential equations. The complete equation is then evaluated to yield a quantitative score.
+
 4.  **Propagate**: The evaluated skeleton is placed into the cluster corresponding to its score. A new cluster is created for any unique score.
