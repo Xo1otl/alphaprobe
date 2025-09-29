@@ -19,25 +19,13 @@ import "context"
 
 type ProposeFunc[PReq, PRes any] func(ctx context.Context, req PReq) PRes
 type ObserveFunc[OReq, ORes any] func(ctx context.Context, req OReq) ORes
-
-// State manages the overall progress and generates high-level tasks.
 type State[PReq, ORes any] interface {
-	// Update updates the state with a result from the observation stage.
 	Update(res ORes) (done bool)
-	// Next provides the next request for the proposal stage.
-	Next() (req PReq, ok bool)
-	// Sent confirms the dispatch of the request last provided by Next.
-	Sent(req PReq)
+	NewRequest() (req PReq, ok bool)
 }
-
-// Adapter transforms proposal results into observation requests.
 type Adapter[PRes, OReq any] interface {
-	// Recv receives a result from the proposal stage to be processed.
-	Recv(res PRes) (done bool)
-	// Next provides the next request for the observation stage.
+	Recv(res PRes)
 	Next() (req OReq, ok bool)
-	// Commit confirms the dispatch of the request last provided by Next.
-	Commit(req OReq)
 }
 
 // --- Example ---
@@ -108,4 +96,3 @@ import (
 ```
 
 # Your Task
-Please implement AdapterState in mock.go

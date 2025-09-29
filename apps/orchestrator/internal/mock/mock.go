@@ -177,7 +177,7 @@ func NewAdapter() *Adapter {
 	}
 }
 
-func (s *Adapter) Recv(res ProposeResult) bool {
+func (s *Adapter) Recv(res ProposeResult) {
 	for _, skeleton := range res.Skeletons {
 		req := ObserveRequest{
 			Query:    skeleton,
@@ -185,7 +185,6 @@ func (s *Adapter) Recv(res ProposeResult) bool {
 		}
 		s.queue = append(s.queue, req)
 	}
-	return false
 }
 
 func (s *Adapter) Next() (ObserveRequest, bool) {

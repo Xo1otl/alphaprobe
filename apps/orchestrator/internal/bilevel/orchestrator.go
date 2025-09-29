@@ -15,7 +15,7 @@ type State[PReq, ORes any] interface {
 	NewRequest() (req PReq, ok bool)
 }
 type Adapter[PRes, OReq any] interface {
-	Recv(res PRes) (done bool)
+	Recv(res PRes)
 	Next() (req OReq, ok bool)
 }
 
@@ -72,7 +72,7 @@ func RunWithAdapter[PReq, PRes, OReq, ORes any](
 
 	ring := pipeline.NewRing(ctx)
 	pipeline.GoWorkers(ring, orchestrator.proposeConcurrency, orchestrator.proposeFn, proposeReqCh, proposeResCh)
-	pipeline.GoController(ring, adapter.Recv, adapter.Next, proposeResCh, observeReqCh)
+	pipeline.GoController(ring, func(res PRes) (done bool) { adapter.Recv(res); return false }, adapter.Next, proposeResCh, observeReqCh)
 	pipeline.GoWorkers(ring, orchestrator.observeConcurrency, orchestrator.observeFn, observeReqCh, observeResCh)
 	pipeline.GoController(ring, state.Update, state.NewRequest, observeResCh, proposeReqCh)
 
