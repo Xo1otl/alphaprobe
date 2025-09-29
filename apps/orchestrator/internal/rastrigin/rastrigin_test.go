@@ -2,12 +2,13 @@ package rastrigin_test
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
 	"alphaprobe/orchestrator/internal/bilevel"
 	"alphaprobe/orchestrator/internal/rastrigin"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestRastriginWithRunner(t *testing.T) {
@@ -22,59 +23,41 @@ func TestRastriginWithRunner(t *testing.T) {
 		testTimeout        = 5 * time.Second
 	)
 
-	doneCh := make(chan error, 1)
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
 
-	go func() {
-		state := rastrigin.NewState(
-			islandPopulation,
-			numIslands,
-			totalEvaluations,
-			migrationInterval,
-			migrationSize,
-		)
+	state := rastrigin.NewState(
+		islandPopulation,
+		numIslands,
+		totalEvaluations,
+		migrationInterval,
+		migrationSize,
+	)
 
-		orchestrator := bilevel.NewOrchestrator(
-			rastrigin.Propose,
-			rastrigin.Observe,
-			proposeConcurrency,
-			observeConcurrency,
-		)
+	orchestrator := bilevel.NewOrchestrator(
+		rastrigin.Propose,
+		rastrigin.Observe,
+		proposeConcurrency,
+		observeConcurrency,
+	)
 
-		fmt.Println("--- Starting Rastrigin GA with Runner ---")
-		bilevel.Run(orchestrator, ctx, state)
-		fmt.Println("--- Rastrigin GA Finished ---")
+	bilevel.Run(orchestrator, ctx, state)
 
-		var bestFitness rastrigin.Fitness = 1e6
-		for _, island := range state.Islands {
-			for _, individual := range island.Population {
-				if individual.Fitness < bestFitness {
-					bestFitness = individual.Fitness
-				}
+	if ctx.Err() == context.DeadlineExceeded {
+		t.Fatal("Test timed out, indicating a potential deadlock.")
+	}
+
+	var bestFitness rastrigin.Fitness = 1e6
+	for _, island := range state.Islands {
+		for _, individual := range island.Population {
+			if individual.Fitness < bestFitness {
+				bestFitness = individual.Fitness
 			}
 		}
-
-		fmt.Printf("Final best fitness: %f\n", bestFitness)
-		fmt.Printf("Total evaluations: %d\n", state.EvaluationsCount)
-
-		if state.EvaluationsCount < totalEvaluations {
-			doneCh <- fmt.Errorf("Expected at least %d evaluations, but got %d", totalEvaluations, state.EvaluationsCount)
-			return
-		}
-		if bestFitness > 1.0 { // Loosened for faster test
-			doneCh <- fmt.Errorf("Expected best fitness to be less than 1.0, but got %f", bestFitness)
-			return
-		}
-		close(doneCh)
-	}()
-
-	select {
-	case err := <-doneCh:
-		if err != nil {
-			t.Error(err)
-		}
-	case <-ctx.Done():
-		t.Fatal("Test timed out (potential deadlock)")
 	}
+
+	assert.True(t, state.EvaluationsCount >= totalEvaluations, "Should have completed at least the specified number of evaluations")
+	assert.Less(t, bestFitness, 1.0, "The final best fitness should be less than 1.0")
+
+	t.Logf("Test finished. Best fitness found: %f", bestFitness)
 }

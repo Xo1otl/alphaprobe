@@ -8,7 +8,7 @@
 ```
 
 # Prompt
-1. Please read `llmsr.go` and `llmsr_test.go`.
+1. Please read `llmsr/README.md`.
 2. Please read `task.md`
 3. Please perform "Your Task" section in `task.md`
 It is important that you read these in this exact order. Let's begin.

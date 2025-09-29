@@ -1,7 +1,9 @@
 # package bilevel
 ```go
 // Package bilevel provides a framework for orchestrating two-level concurrent proposal and observation tasks.
-// 
+// It is designed with the assumption that the Propose and Observe functions are I/O-bound,
+// such as performing network requests or GPU operations.
+//
 // This package delegates error handling to the implementer. Since the
 // generic type parameters (PReq, PRes, etc.) are of type `any`, a common
 // pattern is to embed an `error` field within the structs used for these types.
@@ -28,7 +30,7 @@ type Adapter[PRes, OReq any] interface {
 	Next() (req OReq, ok bool)
 }
 
-// --- Example ---
+// --- Examples ---
 
 /*
 ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
@@ -42,57 +44,23 @@ orchestrator := bilevel.NewOrchestrator(
 )
 bilevel.RunWithAdapter(orchestrator, ctx, state, adapter)
 */
-```
 
-# Go 1.25+ WaitGroup
-```go
-// Copyright 2011 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-
-package sync
-
-import (
-	"internal/race"
-	"internal/synctest"
-	"sync/atomic"
-	"unsafe"
+/*
+ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+state := NewState()
+orchestrator := bilevel.NewOrchestrator(
+	Propose,
+	Observe,
+	proposeConcurrency,
+	observeConcurrency,
 )
-
-// A WaitGroup is a counting semaphore typically used to wait
-// for a group of goroutines or tasks to finish.
-//
-// Typically, a main goroutine will start tasks, each in a new
-// goroutine, by calling [WaitGroup.Go] and then wait for all tasks to
-// complete by calling [WaitGroup.Wait]. For example:
-//
-//	var wg sync.WaitGroup
-//	wg.Go(task1)
-//	wg.Go(task2)
-//	wg.Wait()
-//
-// A WaitGroup may also be used for tracking tasks without using Go to
-// start new goroutines by using [WaitGroup.Add] and [WaitGroup.Done].
-//
-// The previous example can be rewritten using explicitly created
-// goroutines along with Add and Done:
-//
-//	var wg sync.WaitGroup
-//	wg.Add(1)
-//	go func() {
-//		defer wg.Done()
-//		task1()
-//	}()
-//	wg.Add(1)
-//	go func() {
-//		defer wg.Done()
-//		task2()
-//	}()
-//	wg.Wait()
-//
-// This pattern is common in code that predates [WaitGroup.Go].
-//
-// A WaitGroup must not be copied after first use.
+bilevel.Run(orchestrator, ctx, state)
+*/
 ```
+
+# Rules
+* Do not modify the pipeline or bilevel packages.
+* Your implementations must adhere to the contracts of the bilevel package. Note that State and Adapter methods are guaranteed to be called from a single goroutine, so they do not need to be internally thread-safe. However, you must carefully manage their internal state, as the order of method calls (e.g., Update vs. Next) is not at all guaranteed to be alternating.
 
 # Your Task
+llmsr_test.goとstate.goの実装を読んでください。そして、これがREADME.mdのロジックを正確に再現しているか、厳密に検証してください。
