@@ -49,36 +49,9 @@ import (
 // A WaitGroup must not be copied after first use.
 ```
 
-# **My Concern**
-About making types more restrictive to clarify the framework's philosophy
-
-The `GoController` handles channels and needs to be encapsulated in a struct. However, what if we allow users to pass simple functions, and then have the `Runner` be responsible for wrapping them into the required struct?
-
-Could we adopt the API proposal below? Additionally, regarding the `data` returned by `propose`, perhaps the `Runner` could wrap the user-provided `observe` function to simply pass this data through at the end.
-
-## API Proposal
-
-```go
-// B(asis): Input for the Propose function
-// C(andidates): Primary output from the Propose function
-// D(ata): Output from Propose that is not used by Observe
-// Q(uery): Input for the Observe function
-// E(vidence): Output from the Observe function
-type ProposeFunc[B, C, D any] func(ctx context.Context, basis B) (C, D)
-type ObserveFunc[Q, E, D any] func(ctx context.Context, query Q) E
-type FanOutFunc[C, Q any] func(candidates C) []Q
-
-// The State controller only cares about the initial input and final output, so C is not needed.
-type State[B, Q, E, D any] interface {
-	Update(query Q, evidence E, data D) (done bool)
-	Next() (basis B, ok bool)
-	Sent(basis B)
-}
-
-// The logic to construct the appropriate wrappers will be implemented within Run and RunWithFanOut.
-```
-
-This approach would result in an API that better reflects its philosophy as an exploration framework. It would also provide implementers with a clearer set of tasks compared to a design that is too flexible.
-
 # **Your Task**
-How do you think? Is it possible?
+Please evaluate the design of the `Update`, `Next`, `Sent`, and `State` components in the Rastrigin implementation.
+
+I am particularly interested in two areas:
+1.  **Design**: Is the separation of responsibilities between these components appropriate?
+2.  **Performance & Conciseness**: Are there ways to improve the algorithm's time complexity while making the code more compact?

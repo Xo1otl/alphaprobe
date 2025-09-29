@@ -66,15 +66,30 @@ It receives tasks from the `reqCh` channel, executes the `taskFn`, and sends the
 
 # GoController
 
-`GoController` is a component responsible for synchronous processing, such as state management and task routing within the pipeline. It operates on a single internal goroutine, allowing it to **safely manage state without the need for mutexes or other locking mechanisms**.
+`GoController` manages state and task distribution. It runs on a single goroutine to prevent data races without locks. It receives results from one channel, processes them, and sends new tasks to another.
 
-It receives results from a `resCh` channel, updates its state based on those results, and sends new tasks to a `reqCh` channel. This behavior is defined by the following three callback functions:
+This behavior is defined by three callback functions:
 
--   `onResult`: Processes a result received from `resCh`. This can involve updating state, adding new tasks to a queue, or checking for termination conditions.
--   `onNextTask`: Retrieves the next task from a queue to be sent to `reqCh`.
--   `onTaskSent`: Called immediately after a task is sent to `reqCh`, for instance, to remove it from the queue.
+* `onResult`: Processes a result.
+* `onNextTask`: Returns the next task to be sent.
+* `onTaskSent`: Confirms a task has been sent.
 
-This design centralizes state access logic within a single goroutine, making it possible to describe complex state transitions without worrying about race conditions.
+## Callback Guarantees
+
+The callbacks have specific invocation rules:
+
+* The task returned by `onNextTask` is a **candidate**. It is **not guaranteed** to be sent, as it can be preempted by an incoming result.
+* `onTaskSent` is called **only after** a task is successfully sent. State changes, such as removing an item from a queue, should be performed here.
+
+This design supports two implementation patterns:
+
+1.  **Latest-State Reflection**: Unsent tasks are automatically discarded.
+    * **`onNextTask`**: Calculates a task from the current state.
+    * **`onTaskSent`**: (Optional) Updates status.
+
+2.  **Queuing**: Guarantees no task loss via an external queue.
+    * **`onNextTask`**: Returns the task at the queue's head **without removing it**.
+    * **`onTaskSent`**: Removes the task from the queue's head.
 
 # Shutdown Sequence
 

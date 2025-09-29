@@ -67,16 +67,14 @@ func GoController[Req, Res any](
 	r.Wg.Go(func() {
 		defer close(reqCh)
 
-		var nextTask Req
-		var hasTask bool
-		var sendCh chan<- Req
-
-		nextTask, hasTask = onNextTask()
-		if hasTask {
-			sendCh = reqCh
-		}
-
 		for {
+			nextTask, hasTask := onNextTask()
+
+			var sendCh chan<- Req
+			if hasTask {
+				sendCh = reqCh
+			}
+
 			select {
 			case <-r.Ctx.Done():
 				return
@@ -88,21 +86,8 @@ func GoController[Req, Res any](
 				if onResult(res) {
 					return
 				}
-				nextTask, hasTask = onNextTask()
-				if hasTask {
-					sendCh = reqCh
-				} else {
-					sendCh = nil
-				}
-
 			case sendCh <- nextTask:
 				onTaskSent(nextTask)
-				nextTask, hasTask = onNextTask()
-				if hasTask {
-					sendCh = reqCh
-				} else {
-					sendCh = nil
-				}
 			}
 		}
 	})
