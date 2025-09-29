@@ -2,8 +2,20 @@ package llmsr
 
 import (
 	"log"
+	"math"
 	"math/rand"
 	"sort"
+)
+
+const (
+	// T0 is the initial temperature for Boltzmann selection.
+	T0 = 1.0
+	// N is the total number of individuals to be evaluated before the island is considered for replacement.
+	N = 100
+	// Tp is a temperature parameter for skeleton selection, typically fixed to 1.
+	Tp = 1.0
+	// Epsilon is a small constant to prevent division by zero.
+	Epsilon = 1e-6
 )
 
 // ProgramSkeleton represents the symbolic structure of an equation.
@@ -26,8 +38,9 @@ type Cluster struct {
 
 // Island holds a population of programs organized into clusters.
 type Island struct {
-	ID       int
-	Clusters map[Score]*Cluster
+	ID               int
+	Clusters         map[Score]*Cluster
+	EvaluationsCount int
 }
 
 // State manages the entire population across all islands.
@@ -47,8 +60,9 @@ func NewState(initialSkeleton ProgramSkeleton, maxEvaluations, numIslands, migra
 	islands := make([]*Island, numIslands)
 	for i := range numIslands {
 		islands[i] = &Island{
-			ID:       i,
-			Clusters: make(map[Score]*Cluster),
+			ID:               i,
+			Clusters:         make(map[Score]*Cluster),
+			EvaluationsCount: 0,
 		}
 	}
 
@@ -73,6 +87,7 @@ func (s *State) Update(res ObserveResult) (done bool) {
 	s.EvaluationsCount++
 
 	island := s.Islands[res.Metadata.IslandID]
+	island.EvaluationsCount++ // Increment island-specific evaluation count
 	program := &Program{Skeleton: res.Query, Score: res.Evidence}
 
 	if cluster, ok := island.Clusters[program.Score]; ok {
@@ -101,33 +116,116 @@ func (s *State) NewRequest() (ProposeRequest, bool) {
 		}, true
 	}
 
-	// Select a random island to contribute to genetic diversity.
+	parentA := s.selectParent()
+	parentB := s.selectParent()
+
+	// Assign the new request to a random island to encourage diversity.
+	islandID := rand.Intn(len(s.Islands))
+
+	return ProposeRequest{
+		Parents:  []*Program{parentA, parentB},
+		IslandID: islandID,
+	}, true
+}
+
+func (s *State) selectParent() *Program {
+	// 1. Random Island Selection
 	island := s.Islands[rand.Intn(len(s.Islands))]
 
-	// Collect a pool of potential parent programs from the island's clusters.
-	parentsPool := make([]*Program, 0, len(island.Clusters))
+	if len(island.Clusters) == 0 {
+		return &Program{Skeleton: s.InitialSkeleton}
+	}
+
+	// 2. Cluster Selection (Score-based)
+	clusters := make([]*Cluster, 0, len(island.Clusters))
 	for _, cluster := range island.Clusters {
-		if len(cluster.Programs) > 0 {
-			// Add a random program from each cluster to the pool.
-			parentsPool = append(parentsPool, cluster.Programs[rand.Intn(len(cluster.Programs))])
+		clusters = append(clusters, cluster)
+	}
+
+	tc := T0 * (1 - float64(island.EvaluationsCount%N)/float64(N))
+	if tc < Epsilon {
+		tc = Epsilon
+	}
+
+	probabilities := make([]float64, len(clusters))
+	sumExp := 0.0
+	for i, cluster := range clusters {
+		expVal := math.Exp(cluster.Score / tc)
+		probabilities[i] = expVal
+		sumExp += expVal
+	}
+
+	if sumExp == 0 {
+		sumExp = Epsilon
+	}
+
+	for i := range probabilities {
+		probabilities[i] /= sumExp
+	}
+
+	randVal := rand.Float64()
+	cumulativeProb := 0.0
+	var selectedCluster *Cluster
+	for i, prob := range probabilities {
+		cumulativeProb += prob
+		if randVal <= cumulativeProb {
+			selectedCluster = clusters[i]
+			break
+		}
+	}
+	if selectedCluster == nil {
+		selectedCluster = clusters[len(clusters)-1]
+	}
+
+	// 3. Skeleton Selection (Length-based)
+	if len(selectedCluster.Programs) == 0 {
+		return &Program{Skeleton: s.InitialSkeleton}
+	}
+
+	minLength := len(selectedCluster.Programs[0].Skeleton)
+	maxLength := len(selectedCluster.Programs[0].Skeleton)
+	for _, program := range selectedCluster.Programs {
+		length := len(program.Skeleton)
+		if length < minLength {
+			minLength = length
+		}
+		if length > maxLength {
+			maxLength = length
 		}
 	}
 
-	// If the pool has fewer than two parents, fall back to the initial skeleton to prevent stalling.
-	// This is crucial for islands that may have been reset or are sparsely populated.
-	if len(parentsPool) < 2 {
-		return ProposeRequest{
-			Parents:  []*Program{{Skeleton: s.InitialSkeleton}, {Skeleton: s.InitialSkeleton}},
-			IslandID: island.ID,
-		}, true
+	skelProbs := make([]float64, len(selectedCluster.Programs))
+	sumExpSkel := 0.0
+	for i, program := range selectedCluster.Programs {
+		normalizedLength := float64(len(program.Skeleton)-minLength) / (float64(maxLength-minLength) + Epsilon)
+		expVal := math.Exp(-normalizedLength / Tp)
+		skelProbs[i] = expVal
+		sumExpSkel += expVal
 	}
 
-	// Shuffle the pool and select two distinct parents for crossover.
-	rand.Shuffle(len(parentsPool), func(i, j int) { parentsPool[i], parentsPool[j] = parentsPool[j], parentsPool[i] })
-	return ProposeRequest{
-		Parents:  []*Program{parentsPool[0], parentsPool[1]},
-		IslandID: island.ID,
-	}, true
+	if sumExpSkel == 0 {
+		sumExpSkel = Epsilon
+	}
+
+	for i := range skelProbs {
+		skelProbs[i] /= sumExpSkel
+	}
+
+	randValSkel := rand.Float64()
+	cumulativeProbSkel := 0.0
+	var selectedProgram *Program
+	for i, prob := range skelProbs {
+		cumulativeProbSkel += prob
+		if randValSkel <= cumulativeProbSkel {
+			selectedProgram = selectedCluster.Programs[i]
+			break
+		}
+	}
+	if selectedProgram == nil {
+		selectedProgram = selectedCluster.Programs[len(selectedCluster.Programs)-1]
+	}
+
+	return selectedProgram
 }
 
 func (s *State) manageIslands() {
