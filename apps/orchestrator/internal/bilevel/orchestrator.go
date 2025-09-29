@@ -10,7 +10,14 @@ import (
 
 type ProposeFunc[PReq, PRes any] func(ctx context.Context, req PReq) PRes
 type ObserveFunc[OReq, ORes any] func(ctx context.Context, req OReq) ORes
-type FanOutFunc[PRes, OReq any] func(res PRes) []OReq
+type State[PReq, ORes any] interface {
+	Update(res ORes) (done bool)
+	NewRequest() (req PReq, ok bool)
+}
+type Adapter[PRes, OReq any] interface {
+	Recv(res PRes) (done bool)
+	Next() (req OReq, ok bool)
+}
 
 // --- Orchestrator ---
 
@@ -47,16 +54,16 @@ func Run[PReq, PRes, ORes any](
 	ring := pipeline.NewRing(ctx)
 	pipeline.GoWorkers(ring, orchestrator.proposeConcurrency, orchestrator.proposeFn, proposeReqCh, proposeResCh)
 	pipeline.GoWorkers(ring, orchestrator.observeConcurrency, orchestrator.observeFn, proposeResCh, observeResCh)
-	GoControllerWithState(ring, state, proposeReqCh, observeResCh)
+	pipeline.GoController(ring, state.Update, state.NewRequest, observeResCh, proposeReqCh)
 
 	ring.Wait()
 }
 
-func RunWithFanOut[PReq, PRes, OReq, ORes any](
+func RunWithAdapter[PReq, PRes, OReq, ORes any](
 	orchestrator *Orchestrator[PReq, PRes, OReq, ORes],
 	ctx context.Context,
 	state State[PReq, ORes],
-	fanOutFn FanOutFunc[PRes, OReq],
+	adapter Adapter[PRes, OReq],
 ) {
 	proposeReqCh := make(chan PReq, orchestrator.proposeConcurrency)
 	proposeResCh := make(chan PRes, orchestrator.proposeConcurrency)
@@ -65,9 +72,9 @@ func RunWithFanOut[PReq, PRes, OReq, ORes any](
 
 	ring := pipeline.NewRing(ctx)
 	pipeline.GoWorkers(ring, orchestrator.proposeConcurrency, orchestrator.proposeFn, proposeReqCh, proposeResCh)
-	GoFanOutController(ring, fanOutFn, proposeResCh, observeReqCh)
+	pipeline.GoController(ring, adapter.Recv, adapter.Next, proposeResCh, observeReqCh)
 	pipeline.GoWorkers(ring, orchestrator.observeConcurrency, orchestrator.observeFn, observeReqCh, observeResCh)
-	GoControllerWithState(ring, state, proposeReqCh, observeResCh)
+	pipeline.GoController(ring, state.Update, state.NewRequest, observeResCh, proposeReqCh)
 
 	ring.Wait()
 }

@@ -59,20 +59,26 @@ func GoWorkers[Req, Res any](
 func GoController[Req, Res any](
 	r *Ring,
 	onResult func(res Res) (done bool),
-	onNextTask func() (task Req, ok bool),
-	onTaskSent func(task Req),
+	onNext func() (task Req, ok bool),
 	resCh <-chan Res,
 	reqCh chan<- Req,
 ) {
 	r.Wg.Go(func() {
 		defer close(reqCh)
 
-		for {
-			nextTask, hasTask := onNextTask()
+		var nextTask Req
+		var hasTask bool
+		var sendCh chan<- Req
 
-			var sendCh chan<- Req
+		for {
+			if !hasTask {
+				nextTask, hasTask = onNext()
+			}
+
 			if hasTask {
 				sendCh = reqCh
+			} else {
+				sendCh = nil
 			}
 
 			select {
@@ -86,8 +92,9 @@ func GoController[Req, Res any](
 				if onResult(res) {
 					return
 				}
+
 			case sendCh <- nextTask:
-				onTaskSent(nextTask)
+				hasTask = false
 			}
 		}
 	})

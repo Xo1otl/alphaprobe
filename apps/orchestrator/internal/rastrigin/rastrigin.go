@@ -80,26 +80,19 @@ func (s *State) Update(res ObserveResult) (done bool) {
 	return s.EvaluationsCount >= s.TotalEvaluations
 }
 
-func (s *State) Next() (*Island, bool) {
+func (s *State) NewRequest() (*Island, bool) {
 	if len(s.AvailableIslandIDs) == 0 {
 		return nil, false
 	}
 	randIndex := rand.Intn(len(s.AvailableIslandIDs))
 	islandID := s.AvailableIslandIDs[randIndex]
-	return s.Islands[islandID], true
-}
 
-func (s *State) Sent(task *Island) {
-	// Find the index of the task's ID in AvailableIslandIDs
-	for i, id := range s.AvailableIslandIDs {
-		if id == task.ID {
-			// Remove the ID from AvailableIslandIDs
-			s.AvailableIslandIDs = append(s.AvailableIslandIDs[:i], s.AvailableIslandIDs[i+1:]...)
-			break
-		}
-	}
+	// Remove the ID from AvailableIslandIDs
+	s.AvailableIslandIDs = append(s.AvailableIslandIDs[:randIndex], s.AvailableIslandIDs[randIndex+1:]...)
 	// Add the ID to PendingIslands
-	s.PendingIslands[task.ID] = true
+	s.PendingIslands[islandID] = true
+
+	return s.Islands[islandID], true
 }
 
 // --- Types for bilevel Runner ---

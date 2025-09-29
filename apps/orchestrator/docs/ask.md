@@ -8,8 +8,7 @@
 ```
 
 # Prompt
-1.  Please read `pipeline.go` and `README.md`.
-2.  Please read `controller.go` and `orchestrator.go`.
-3.  Please read `rastrigin.go` and `rastrigin_test.go`.
-4.  Please read `task.md` and then consider "Your Task".
+1. Please read `llmsr.go` and `llmsr_test.go`.
+2. Please read `task.md`
+3. Please perform "Your Task" section in `task.md`
 It is important that you read these in this exact order. Let's begin.

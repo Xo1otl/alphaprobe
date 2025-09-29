@@ -1,4 +1,62 @@
-# Go 1.25+ WaitGroup usage
+# package bilevel
+```go
+// Package bilevel provides a framework for orchestrating two-level concurrent proposal and observation tasks.
+// 
+// This package delegates error handling to the implementer. Since the
+// generic type parameters (PReq, PRes, etc.) are of type `any`, a common
+// pattern is to embed an `error` field within the structs used for these types.
+//
+// The `ProposeFunc` or `ObserveFunc` implementations can then populate this `Err`
+// field upon failure. Subsequently, the `State.Update` method can inspect
+// this field. Based on the error, the implementation can choose to either
+// record the error in its state or call the context's `cancel` function to
+// terminate all ongoing goroutines gracefully.
+package bilevel
+
+import "context"
+
+// --- Public API ---
+
+type ProposeFunc[PReq, PRes any] func(ctx context.Context, req PReq) PRes
+type ObserveFunc[OReq, ORes any] func(ctx context.Context, req OReq) ORes
+
+// State manages the overall progress and generates high-level tasks.
+type State[PReq, ORes any] interface {
+	// Update updates the state with a result from the observation stage.
+	Update(res ORes) (done bool)
+	// Next provides the next request for the proposal stage.
+	Next() (req PReq, ok bool)
+	// Sent confirms the dispatch of the request last provided by Next.
+	Sent(req PReq)
+}
+
+// Adapter transforms proposal results into observation requests.
+type Adapter[PRes, OReq any] interface {
+	// Recv receives a result from the proposal stage to be processed.
+	Recv(res PRes) (done bool)
+	// Next provides the next request for the observation stage.
+	Next() (req OReq, ok bool)
+	// Commit confirms the dispatch of the request last provided by Next.
+	Commit(req OReq)
+}
+
+// --- Example ---
+
+/*
+ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+state := NewState()
+adapter := NewAdapter()
+orchestrator := bilevel.NewOrchestrator(
+	Propose,
+	Observe,
+	proposeConcurrency,
+	observeConcurrency,
+)
+bilevel.RunWithAdapter(orchestrator, ctx, state, adapter)
+*/
+```
+
+# Go 1.25+ WaitGroup
 ```go
 // Copyright 2011 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
@@ -49,9 +107,5 @@ import (
 // A WaitGroup must not be copied after first use.
 ```
 
-# **Your Task**
-Please evaluate the design of the `Update`, `Next`, `Sent`, and `State` components in the Rastrigin implementation.
-
-I am particularly interested in two areas:
-1.  **Design**: Is the separation of responsibilities between these components appropriate?
-2.  **Performance & Conciseness**: Are there ways to improve the algorithm's time complexity while making the code more compact?
+# Your Task
+Please implement AdapterState in mock.go
