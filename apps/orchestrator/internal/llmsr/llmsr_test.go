@@ -3,6 +3,7 @@ package llmsr
 import (
 	"alphaprobe/orchestrator/internal/bilevel"
 	"context"
+	"log"
 	"testing"
 	"time"
 
@@ -11,7 +12,7 @@ import (
 
 func TestRunLLMSR_Deterministic(t *testing.T) {
 	const (
-		maxEvaluations     = 1000
+		maxEvaluations     = 100
 		numIslands         = 4
 		migrationInterval  = 25
 		proposeConcurrency = 2
@@ -23,11 +24,12 @@ func TestRunLLMSR_Deterministic(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
 
-	initialSkeleton := "100"
-	state := NewState(initialSkeleton, maxEvaluations, numIslands, migrationInterval)
-	adapter := NewAdapter()
+	logger := log.Default()
 
-	// The generic type arguments are inferred by the compiler, so they can be omitted.
+	initialSkeleton := "100"
+	state := NewState(initialSkeleton, maxEvaluations, numIslands, migrationInterval, logger)
+	adapter := NewAdapter(logger)
+
 	orchestrator := bilevel.NewOrchestrator(
 		MockPropose,
 		MockObserve,

@@ -1,6 +1,7 @@
 package llmsr
 
 import (
+	"log"
 	"math/rand"
 	"sort"
 )
@@ -38,12 +39,13 @@ type State struct {
 	NextMigration         int
 	InitialSkeleton       ProgramSkeleton
 	NumIslandsToEliminate int
+	Logger                *log.Logger
 }
 
 // NewState creates a new initial state for the GA.
-func NewState(initialSkeleton ProgramSkeleton, maxEvaluations, numIslands, migrationInterval int) *State {
+func NewState(initialSkeleton ProgramSkeleton, maxEvaluations, numIslands, migrationInterval int, logger *log.Logger) *State {
 	islands := make([]*Island, numIslands)
-	for i := 0; i < numIslands; i++ {
+	for i := range numIslands {
 		islands[i] = &Island{
 			ID:       i,
 			Clusters: make(map[Score]*Cluster),
@@ -58,11 +60,16 @@ func NewState(initialSkeleton ProgramSkeleton, maxEvaluations, numIslands, migra
 		NextMigration:         migrationInterval,
 		InitialSkeleton:       initialSkeleton,
 		NumIslandsToEliminate: numIslands / 2,
+		Logger:                logger,
 	}
 }
 
 // Update incorporates an observation result into the state.
 func (s *State) Update(res ObserveResult) (done bool) {
+	if res.Err != nil {
+		s.Logger.Printf("error in observation: %v", res.Err)
+		return false
+	}
 	s.EvaluationsCount++
 
 	island := s.Islands[res.Metadata.IslandID]
@@ -191,6 +198,7 @@ type ProposeRequest struct {
 type ProposeResult struct {
 	Skeletons []ProgramSkeleton
 	Metadata  Metadata
+	Err       error
 }
 
 type ObserveRequest struct {
@@ -202,6 +210,7 @@ type ObserveResult struct {
 	Query    ProgramSkeleton
 	Evidence Score
 	Metadata Metadata
+	Err      error
 }
 
 type Metadata struct {
@@ -211,16 +220,22 @@ type Metadata struct {
 // --- Adapter ---
 
 type Adapter struct {
-	queue []ObserveRequest
+	queue  []ObserveRequest
+	Logger *log.Logger
 }
 
-func NewAdapter() *Adapter {
+func NewAdapter(logger *log.Logger) *Adapter {
 	return &Adapter{
-		queue: make([]ObserveRequest, 0),
+		queue:  make([]ObserveRequest, 0),
+		Logger: logger,
 	}
 }
 
 func (a *Adapter) Recv(res ProposeResult) {
+	if res.Err != nil {
+		a.Logger.Printf("error in proposal: %v", res.Err)
+		return
+	}
 	for _, skeleton := range res.Skeletons {
 		req := ObserveRequest{
 			Query:    skeleton,

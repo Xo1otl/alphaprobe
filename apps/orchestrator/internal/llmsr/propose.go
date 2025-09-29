@@ -13,7 +13,7 @@ func MockPropose(ctx context.Context, req ProposeRequest) ProposeResult {
 	parentSkeleton := req.Parents[0].Skeleton
 	val, err := strconv.Atoi(parentSkeleton)
 	if err != nil {
-		return ProposeResult{Skeletons: []ProgramSkeleton{}}
+		return ProposeResult{Err: err}
 	}
 
 	newSkeletons := []ProgramSkeleton{

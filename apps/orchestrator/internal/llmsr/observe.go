@@ -11,8 +11,8 @@ func MockObserve(ctx context.Context, req ObserveRequest) ObserveResult {
 	if err != nil {
 		return ObserveResult{
 			Query:    req.Query,
-			Evidence: 1e9,
 			Metadata: req.Metadata,
+			Err:      err,
 		}
 	}
 

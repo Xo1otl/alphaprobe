@@ -59,8 +59,11 @@ bilevel.Run(orchestrator, ctx, state)
 ```
 
 # Rules
-* Do not modify the pipeline or bilevel packages.
-* Your implementations must adhere to the contracts of the bilevel package. Note that State and Adapter methods are guaranteed to be called from a single goroutine, so they do not need to be internally thread-safe. However, you must carefully manage their internal state, as the order of method calls (e.g., Update vs. Next) is not at all guaranteed to be alternating.
+* Do not modify the `pipeline` and `bilevel` packages. However, if you believe a modification is essential, please notify.
+* Adhere to the `bilevel` package contract. `State` and `Adapter` methods do not need to be thread-safe, as they are called from a single goroutine. However, you must manage their state carefully, as the method call order (e.g., `Update` vs. `Next`) is unpredictable.
+* Write idiomatic Go!
 
-# Your Task
-llmsr_test.goとstate.goの実装を読んでください。そして、これがREADME.mdのロジックを正確に再現しているか、厳密に検証してください。
+# Question
+llmsr/state.goを見て欲しい、errorハンドリングとloggingを追加したいです.
+let it crashで、logには残すけどプロセスは終了しない感じがいいかなぁ.
+observeとproposeはmockであり、ここであえてエラーを返して動作チェックとかが可能.
