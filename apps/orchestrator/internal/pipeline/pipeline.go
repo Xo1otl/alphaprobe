@@ -64,7 +64,11 @@ func GoController[Req, Res any](
 	reqCh chan<- Req,
 ) {
 	r.Wg.Go(func() {
-		defer close(reqCh)
+		defer func() {
+			close(reqCh)
+			for range resCh {
+			}
+		}()
 
 		var nextTask Req
 		var hasTask bool
