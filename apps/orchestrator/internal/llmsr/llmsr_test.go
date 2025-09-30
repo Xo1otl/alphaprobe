@@ -19,10 +19,10 @@ import (
 
 const (
 	maxEvaluations     = 3000
-	numIslands         = 1
-	migrationInterval  = 99999
-	proposeConcurrency = 1
-	observeConcurrency = 1
+	numIslands         = 4
+	migrationInterval  = 25
+	proposeConcurrency = 2
+	observeConcurrency = 4
 	testTimeout        = 50 * time.Second
 	initialScore       = -100
 )
@@ -35,7 +35,7 @@ func TestRunLLMSR_Deterministic(t *testing.T) {
 	logger := log.Default()
 
 	initialSkeleton := "-100"
-	state := NewState(initialSkeleton, maxEvaluations, numIslands, migrationInterval, logger)
+	state := NewState(initialSkeleton, maxEvaluations, numIslands, migrationInterval, logger, cancel)
 	adapter := NewAdapter(logger)
 
 	orchestrator := bilevel.NewOrchestrator(
@@ -121,7 +121,7 @@ func TestRunLLMSR_WithGRPCServer(t *testing.T) {
 	// Setup orchestrator
 	logger := log.Default()
 	initialSkeleton := "-100"
-	state := NewState(initialSkeleton, maxEvaluations, numIslands, migrationInterval, logger)
+	state := NewState(initialSkeleton, maxEvaluations, numIslands, migrationInterval, logger, cancel)
 	adapter := NewAdapter(logger)
 
 	proposeFn := NewGRPCPropose(client)
