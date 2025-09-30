@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package llmsr_worker.pb;
 
+option go_package = "alphaprobe/orchestrator/internal/pb;pb";
+
 // llmsr-worker service definition.
 service LLMSR {
   // Propose generates new program skeletons based on parent programs.

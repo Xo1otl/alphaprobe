@@ -1,0 +1,19 @@
+#!/bin/bash
+set -eu
+
+# Root directory of the project
+ROOT_DIR=$(git rev-parse --show-toplevel)
+cd "$ROOT_DIR"
+
+# Output directory for generated Go files
+GO_OUT_DIR="apps/orchestrator/internal/"
+mkdir -p "$GO_OUT_DIR"
+
+# Run protoc
+protoc \
+  -I api/llmsr_worker \
+  --go_out="$GO_OUT_DIR" --go_opt=paths=source_relative \
+  --go-grpc_out="$GO_OUT_DIR" --go-grpc_opt=paths=source_relative \
+  api/llmsr_worker/pb/llmsr.proto
+
+echo "Generated Go gRPC code in $GO_OUT_DIR"

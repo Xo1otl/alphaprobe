@@ -4,5 +4,6 @@ julia = "latest"
 python = "latest"
 uv = "latest"
 bun = "latest"
+protoc = "latest"
 [settings]
 trusted_config_paths = ['/workspaces/alphaprobe']

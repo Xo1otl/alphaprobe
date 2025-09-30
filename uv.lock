@@ -816,6 +816,19 @@ wheels = [
 ]
 
 [[package]]
+name = "grpcio-reflection"
+version = "1.75.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "grpcio" },
+    { name = "protobuf" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/49/a3/95a7a03fcd44f6dedb8196aa98ef71983b86b4d465d181b17def85983449/grpcio_reflection-1.75.1.tar.gz", hash = "sha256:2be3f20b7b93e6e691a0bc761fd7e9996a940b4c96c68f6ca4f7fbc47c3f4b64", size = 18858, upload-time = "2025-09-26T09:13:21.706Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1f/8e/0e78fa08735c9759367da60e863e64923ab4c93f2976a8b51fd0a5adb526/grpcio_reflection-1.75.1-py3-none-any.whl", hash = "sha256:17ef1504c9efd58662e56090379885e5f3f7985ce481cf30d6b1cb25f55ab0ae", size = 22697, upload-time = "2025-09-26T09:12:25.932Z" },
+]
+
+[[package]]
 name = "grpcio-tools"
 version = "1.75.1"
 source = { registry = "https://pypi.org/simple" }
@@ -1407,6 +1420,7 @@ version = "0.1.0"
 source = { editable = "apps/llmsr-worker" }
 dependencies = [
     { name = "grpcio" },
+    { name = "grpcio-reflection" },
 ]
 
 [package.dev-dependencies]
@@ -1415,7 +1429,10 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "grpcio", specifier = ">=1.75.1" }]
+requires-dist = [
+    { name = "grpcio", specifier = ">=1.75.1" },
+    { name = "grpcio-reflection", specifier = ">=1.75.1" },
+]
 
 [package.metadata.requires-dev]
 dev = [{ name = "grpcio-tools", specifier = ">=1.75.1" }]

@@ -5,6 +5,7 @@ from .llmsr_pb2 import (
     Program,
     ProposeRequest,
     ProposeResponse,
+    DESCRIPTOR,
 )
 from .llmsr_pb2_grpc import (
     LLMSRServicer,
