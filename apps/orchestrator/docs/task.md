@@ -61,7 +61,16 @@ bilevel.Run(orchestrator, ctx, state)
 # Rules
 * Do not modify the `pipeline` and `bilevel` packages.
 * Adhere to the `bilevel` package contract. `State` and `Adapter` methods do not need to be thread-safe, as they are called from a single goroutine. However, you must manage their state carefully, as the method call order (e.g., `Update` vs. `Next`) is unpredictable.
-* Write idiomatic Go!
 
 # Your Task
-I think the current implementation doesn't encapsulate evolution within islands. Please revise state.go to accurately reflect the logic in README.md. types.go/adapter.go/observe.go/propose.go may also be relevant.
+@docs/architecture.md は古い設計案に基づいて書かれており、実際のCommand Serviceの実装と異なっています.
+完全版のcommand serviceは、@apps/orchestrator/internal/bilevel/orchestrator.go のRunWithAdapterの仕様に基づいて設計されます.
+
+* task1 pool -> propose
+* task2 pool -> observe
+* control loop -> orchestrator
+* aggregator -> adapter
+* propagate,shouldTerminate,dispatch -> Update,NewRequest
+* repositoryやmemento patternは維持する
+
+bilevel packageの仕様を元にして、Command ServiceのC4 Modelを書き直してほしい.

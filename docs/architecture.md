@@ -1,24 +1,14 @@
-# 導入
+# Introduction
 
-最近LLMを用いた解の発見が流行っている、Alpha EvolveやDeep Researcher with Test-Time Diffusionなどがgoogleによって開発され、大成功を収めている。
+近年、Alpha EvolveやDeep Researcher with Test-Time Diffusionのように、大規模言語モデル（LLM）を用いて科学的な発見を自動化するアプローチが成功を収めています。本プロジェクト「Alpha Probe」は、この流れを汲み、特に化学や物理学の分野における解釈可能な理論モデル（数式や微分方程式など）の発見に特化したフレームワークを構築することを目的とします。機械学習によるブラックボックス的な予測モデルではなく、人間が理解できる普遍的な法則や式を見つけ出すことがゴールです。
 
-このような手法のうち、化学・物理モデルの発見に特化したものの開発に取り組んでいる。
+# Overview
 
-# Abstract
+Alpha Probeのシステムアーキテクチャは、C4モデルを用いて設計されています。本ドキュメントでは、システムの全体像から詳細に至るまでを段階的に説明します。まず、システムが外部環境とどのように関わるかを示す **System Context** を定義します。次に、システムを構成する主要なサービス群を描く **Container Architecture** を示します。最後に、中核機能である探索プロセスを実行する **Command Service Component Architecture** の内部構造を詳述します。
 
-化学・物理モデルの発見では、データセットに適合する数式や微分方程式を構成することが目的である。
+# System Context
 
-機械学習でブラックボックスモデルを構築することも可能だが、そうではなく、解釈可能な理論式を見つけたい。
-
-データや理論値とのフィッティング度合いなどはある程度決定的に測れる。しかし、化学方程式の妥当性や微分方程式の近似解の発見など、計算精度だけが指標でない場合も多い。オッカムの剃刀の原則に則ったモデルのコンパクトさ（記述長）もまた、主要な指標となりうる。
-
-先行研究で考案されている手法も様々であり、本稿では、できるだけ広いカバー範囲を持つシステムの構想を行う。
-
-# C4 Model
-
-## Level 1: System Context Diagram (システムコンテキスト図)
-
-Alpha Probeシステム、ユーザー（研究者）、主要な外部システムとの関係性を示す。
+システムコンテキスト図は、Alpha Probeフレームワーク、それを利用する「研究者」、および連携する外部システムとの関係性を示します。研究者はAlpha Probeを通じてモデル探索を実行し、システムは内部でLLMやGPUなどの外部計算リソースを活用します。
 
 ```plantuml
 @startuml
@@ -41,9 +31,9 @@ Rel(alpha_probe, external_analysis, "分析データを転送")
 @enduml
 ```
 
-## Level 2: Container Diagram (コンテナ図)
+# Container Architecture
 
-Alpha Probeライブラリを構成するサービスをコンテナとして示す。認証・認可はGCPなどにオフロードする予定。
+コンテナ図は、Alpha Probeフレームワークを構成する主要なサービス（コンテナ）を視覚化したものです。ユーザーからのリクエストを受け付けるUI、探索プロセスを司るCommand Service、データの変換や問い合わせを担う各種サービス、そしてリアルタイムなログ配信基盤などが連携して動作します。
 
 ```plantuml
 @startuml
@@ -107,36 +97,29 @@ Rel(query_service, analysis_db, "Query", "データ照会")
 @enduml
 ```
 
-## Level 3: Component Diagram for Command Service
+# Command Service Component Architecture
 
-`Command Service`の内部コンポーネントを示す。
+Command Serviceは、モデル探索プロセスの実行を担う中核コンポーネントです。その内部は、GoのCSP（Communicating Sequential Processes）モデルに基づいたリングアーキテクチャで設計されています。このアーキテクチャでは、「State」「Propose」「Adapter」「Observe」という責務を持つコンポーネントがリング状に接続され、チャネルを通じてデータを循環させながら処理を進めます。これにより、並列処理と状態管理を安全かつ効率的に行います。
 
 ```plantuml
 @startuml
 !include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
 
-title Level 3: Component Diagram for I. Command Service
+title Level 3: Component Diagram for Command Service (Ring Architecture)
 
-Container(ui_service, "UI Service")
+Container(ui_service, "UI Service", "Web UI")
 ContainerDb(primary_db, "Primary DB", "永続化")
 System_Ext(external_services, "External Services", "LLM, GPUなど")
 
 Container_Boundary(command_service, "Command Service") {
-    Component(application, "Application", "エントリーポイント")
-    Component(control_loop, "ControlLoop", "中央コントローラー")
-    Component(state, "State", "メモリ内状態 (Originator)")
+    Component(application, "Application", "エントリーポイント。Orchestratorを生成し、パイプラインリングを構築・実行する。")
     Component(repository, "Repository", "永続化層 (Caretaker)")
 
-    Boundary(strategy, "Strategy (戦略)") {
-        Component(dispatch, "Dispatch", "タスク発行ロジック")
-        Component(propagate, "Propagate", "状態更新ロジック")
-        Component(should_terminate, "ShouldTerminate", "終了判定ロジック")
-    }
-    
-    Boundary(pipeline, "Execution Pipeline (実行パイプライン)") {
-        Component(task1_pool, "Task1 Pool", "ワーカー群")
-        Component(aggregator, "Aggregator", "集約・バッチ処理")
-        Component(task2_pool, "Task2 Pool", "ワーカー群")
+    Boundary(pipeline_ring, "Pipeline Ring (bilevel実行モデル)") {
+        Component(state, "State Controller", "GoController", "状態管理。Proposeタスクを生成し、Observe結果を処理する。")
+        Component(propose, "Propose Workers", "GoWorkers", "Proposeタスクを並列実行する。")
+        Component(adapter, "Adapter Controller", "GoController", "Propose結果を集約・変換し、Observeタスクを生成する。")
+        Component(observe, "Observe Workers", "GoWorkers", "Observeタスクを並列実行する。")
     }
 }
 
@@ -145,29 +128,25 @@ Rel(ui_service, application, "1. 検索リクエスト")
 Rel(application, repository, "2. 状態ロード指示")
 Rel(repository, primary_db, "読み込み")
 Rel(repository, state, "3. 状態を復元")
-Rel(application, pipeline, "4. パイプライン初期化")
-Rel(application, control_loop, "5. ループ開始")
+Rel(application, pipeline_ring, "4. パイプラインを開始")
 
 
-' --- メインループのフロー ---
-Rel(control_loop, should_terminate, "a. 終了確認")
-Rel(control_loop, propagate, "c. 状態更新")
-Rel(control_loop, dispatch, "d. タスク発行 (状態更新)")
-Rel(control_loop, repository, "e. 状態保存 (定期的)")
+' --- パイプラインのデータフロー (リングアーキテクチャ) ---
+Rel(state, propose, "Proposeリクエストを送信")
+Rel(propose, adapter, "Propose結果を送信")
+Rel(adapter, observe, "Observeリクエストを送信")
+Rel(observe, state, "Observe結果を送信")
 
 
-' --- 状態アクセスとMementoパターン ---
-Rel(dispatch, state, "読み書き")
-Rel(propagate, state, "読み書き")
-Rel(should_terminate, state, "参照")
-Rel_Back(state, repository, "Memento作成")
+' --- 永続化 ---
+Rel(application, repository, "状態保存 (定期的)")
+Rel(repository, state, "Mementoを作成")
+Rel_Back(state, repository, "状態を永続化")
 
 
-' --- パイプラインのデータフロー ---
-Rel(dispatch, task1_pool, "リクエスト送信")
-Rel(task1_pool, aggregator, "中間結果送信")
-Rel(aggregator, task2_pool, "集約結果送信")
-Rel(task2_pool, control_loop, "b. 最終結果を通知")
-Rel(pipeline, external_services, "利用")
+' --- 外部サービス利用 ---
+Rel(propose, external_services, "利用")
+Rel(observe, external_services, "利用")
+
 @enduml
 ```
