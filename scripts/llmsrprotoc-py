@@ -1,4 +1,0 @@
-#!/bin/bash
-cd "$(dirname "$0")/.."
-output_path="apps/llmsr-worker/src/"
-python -m grpc_tools.protoc -I api --python_out=$output_path --grpc_python_out=$output_path --pyi_out=$output_path api/llmsr_worker/pb/llmsr.proto
