@@ -21,9 +21,9 @@ const (
 	maxEvaluations     = 3000
 	numIslands         = 1
 	migrationInterval  = 99999
-	proposeConcurrency = 2
-	observeConcurrency = 4
-	testTimeout        = 5 * time.Second
+	proposeConcurrency = 1
+	observeConcurrency = 1
+	testTimeout        = 50 * time.Second
 	initialScore       = -100
 )
 

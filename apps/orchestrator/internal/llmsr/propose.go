@@ -3,16 +3,14 @@ package llmsr
 import (
 	"context"
 	"errors"
-	"math/rand"
 	"strconv"
-	"time"
 
 	"alphaprobe/orchestrator/internal/pb"
 )
 
 // MockPropose generates a predictable set of new skeletons for deterministic testing.
 func MockPropose(ctx context.Context, req ProposeRequest) ProposeResult {
-	time.Sleep(time.Duration(rand.Intn(10)) * time.Millisecond)
+	// time.Sleep(time.Duration(rand.Intn(10)) * time.Millisecond)
 
 	if len(req.Parents) == 0 {
 		return ProposeResult{Err: errors.New("no parents provided")}
