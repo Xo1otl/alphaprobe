@@ -46,11 +46,11 @@ A skeleton $f_i$ is selected from the chosen cluster with a probability proporti
 
 ### 2. Propose (Skeleton Generation)
 
-An LLM generates new equation skeletons from the selected parents.
+An LLM generates new equation skeletons from the selected parents. This is handled via a gRPC call to a dedicated `llmsr-worker` server.
 
 ### 3. Observe (Parameter Optimization & Scoring)
 
-The coefficients for a proposed skeleton are determined by a numerical optimizer (e.g., BFGS) that minimizes error against a target dataset. The finalized equation is then evaluated to produce a score.
+The coefficients for a proposed skeleton are determined by a numerical optimizer (e.g., BFGS) that minimizes error against a target dataset. This step is also executed remotely on the `llmsr-worker` server via gRPC.
 
 ### 4. Propagate
 

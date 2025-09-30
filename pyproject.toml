@@ -16,6 +16,7 @@ dependencies = [
 
     # workspace packages
     "funsearch",
+    "llmsr-worker",
 ]
 
 [project.optional-dependencies]
@@ -25,10 +26,17 @@ cuda = ["jax[cuda]"]
 package = false
 
 [tool.uv.workspace]
-members = ["artifacts/funsearch"]
+members = ["artifacts/funsearch", "apps/llmsr-worker"]
 
 [tool.uv.sources]
 funsearch = { workspace = true }
+llmsr-worker = { workspace = true }
 
 [tool.pyright]
-include = ["scripts", "artifacts/funsearch"]
+include = ["scripts", "artifacts/funsearch", "apps/llmsr-worker"]
+exclude = ["**/pb"]
+
+[dependency-groups]
+dev = [
+    "grpcio-tools>=1.75.1",
+]

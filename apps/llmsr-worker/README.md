@@ -1,15 +1,39 @@
-# 導入
+# Introduction
 
-`orchestrator`はGo言語の強力な並行処理能力を活かして探索プロセス全体を管理する。一方で、探索アルゴリズムの核となる計算処理、すなわち大規模言語モデル(LLM)を用いたプログラム生成や、JAX/NumPyを用いた数値最適化は、Pythonのエコシステムが圧倒的に優位である。この二つの異なる言語環境を効率的かつ安全に連携させるための、専門的な計算サービスが必要となる。
+The `orchestrator` is implemented in Go to manage the search process, while the computationally intensive tasks of program generation and numerical optimization are handled by Python libraries like JAX and NumPy. `llmsr-worker` serves as a dedicated computational service to bridge this language gap, providing a safe and efficient interface between the two environments.
 
-# 概要
+# Overview
 
-`llmsr-worker`は、この課題を解決するためのPython製gRPCサーバーである。このサーバーは、**`Propose` (提案)** と **`Observe` (観測)** という、論理的に完全に独立した2つのRPCサービスエンドポイントを外部に公開する。`orchestrator`は、探索プロセスの各フェーズに応じて、必要とするサービスのみを個別に呼び出す。この明確な責務分離により、Go側のロジックを汚染することなく、Python側で純粋な計算処理に専念できるアーキテクチャを実現するものである。
+`llmsr-worker` is a Python-based gRPC server that exposes two independent RPC endpoints: the **`Propose` Service** and the **`Observe` Service**. This document also details the **Project Structure** and **Usage**. The separation of services allows the Go-based `orchestrator` to call only the necessary computational service for each phase of the search, keeping the core logic clean and focused.
 
-# `Propose`サービス (提案エンドポイント)
+# Project Structure
 
-**`Propose`サービス**は、`orchestrator`が探索空間に新たな候補を投下したい場合に呼び出される。既存のプログラムや問題定義といったコンテキスト情報を受け取り、新しいプログラムの骨格（スケルトン）を生成する責務を担う。内部では、受け取った情報を基にLLMへのプロンプトを構築し、APIを介して推論を実行する。LLMから返された応答を解析し、実行可能なプログラムスケルトンとして`orchestrator`に返却する。
+The `llmsr-worker` is structured like below.
 
-# `Observe`サービス (評価エンドポイント)
+```
+.
+├── api/
+├── src/
+│   └── llmsr_worker/
+│       └── __init__.py
+├── pyproject.toml
+└── README.md
+```
 
-**`Observe`サービス**は、`orchestrator`が提案された候補の性能を評価したい場合に呼び出される。`Propose`サービスによって生成されたプログラムスケルトンと、評価用のデータセット情報を受け取り、その性能を数値化する責務を担う。内部では、JAXやSciPyといった数値計算ライブラリを活用し、スケルトンに含まれる未定の係数（パラメータ）をデータセットに対して最適化する。最終的に、最適化されたプログラムの性能をスコアとして算出し、`orchestrator`に返却する。
+- **`api/`**: Contains Protocol Buffers (`.proto`) files that define the gRPC service contracts for the `Propose` and `Observe` services, including their request and response message types.
+- **`src/llmsr_worker/`**: Contains the core application logic and implements the gRPC services defined in the `api/` directory.
+
+# `Propose` Service
+
+The `Propose` service is called by the `orchestrator` to generate a new program candidate. It receives contextual information, such as existing programs and the problem definition, and constructs a prompt for a Large Language Model (LLM). After executing inference, it parses the LLM's response and returns an executable program skeleton to the `orchestrator`.
+
+# `Observe` Service
+
+The `Observe` service is called by the `orchestrator` to evaluate a program candidate's performance. It receives a program skeleton and an evaluation dataset. Using numerical computation libraries like JAX and SciPy, it optimizes the parameters within the skeleton against the dataset. Finally, it calculates a performance score for the optimized program and returns it to the `orchestrator`.
+
+# Usage
+To start the gRPC server, run the following command from the project's root directory:
+
+```sh
+uv run llmsr-worker
+```

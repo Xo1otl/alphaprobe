@@ -1,0 +1,3 @@
+#!/bin/bash
+cd "$(dirname "$0")/.."
+python -m grpc_tools.protoc -I api --python_out=src --grpc_python_out=src --pyi_out=src api/llmsr_worker/pb/llmsr.proto

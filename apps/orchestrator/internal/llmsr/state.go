@@ -18,18 +18,6 @@ const (
 	Epsilon = 1e-6
 )
 
-// ProgramSkeleton represents the symbolic structure of an equation.
-type ProgramSkeleton = string
-
-// Score represents the quantitative evaluation of a program.
-type Score = float64
-
-// Program is an equation skeleton with an assigned score.
-type Program struct {
-	Skeleton ProgramSkeleton
-	Score    Score
-}
-
 // Cluster groups programs with identical scores.
 type Cluster struct {
 	Score    Score

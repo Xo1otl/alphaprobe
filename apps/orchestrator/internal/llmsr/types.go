@@ -28,3 +28,12 @@ type ObserveResult struct {
 type Metadata struct {
 	IslandID int
 }
+
+type ProgramSkeleton = string
+
+type Score = float64
+
+type Program struct {
+	Skeleton ProgramSkeleton
+	Score    Score
+}
