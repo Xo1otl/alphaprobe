@@ -5,6 +5,7 @@ import (
 	"math"
 	"math/rand"
 	"sort"
+	"strconv"
 )
 
 const (
@@ -18,6 +19,11 @@ const (
 	Epsilon = 1e-6
 )
 
+// scoreToKey converts a float64 score into a consistent string representation suitable for map keys.
+func scoreToKey(score Score) string {
+	return strconv.FormatFloat(score, 'f', -1, 64)
+}
+
 // Cluster groups programs with identical scores.
 type Cluster struct {
 	Score    Score
@@ -27,13 +33,14 @@ type Cluster struct {
 // Island holds a population of programs organized into clusters.
 type Island struct {
 	ID               int
-	Clusters         map[Score]*Cluster
+	Clusters         map[string]*Cluster
 	EvaluationsCount int
+	CullingCount     int
 }
 
 // State manages the entire population across all islands.
 type State struct {
-	Islands               []*Island
+	Islands               map[int]*Island
 	MaxEvaluations        int
 	EvaluationsCount      int
 	MigrationInterval     int
@@ -45,12 +52,22 @@ type State struct {
 
 // NewState creates a new initial state for the GA.
 func NewState(initialSkeleton ProgramSkeleton, maxEvaluations, numIslands, migrationInterval int, logger *log.Logger) *State {
-	islands := make([]*Island, numIslands)
+	initialScoreVal, err := strconv.ParseFloat(string(initialSkeleton), 64)
+	if err != nil {
+		logger.Fatalf("Could not parse initial skeleton '%s' into a float score: %v", initialSkeleton, err)
+	}
+	initialScore := Score(initialScoreVal)
+
+	islands := make(map[int]*Island, numIslands)
 	for i := range numIslands {
+		program := &Program{Skeleton: initialSkeleton, Score: initialScore}
+		cluster := &Cluster{Score: initialScore, Programs: []*Program{program}}
+		initialKey := scoreToKey(initialScore)
 		islands[i] = &Island{
 			ID:               i,
-			Clusters:         make(map[Score]*Cluster),
+			Clusters:         map[string]*Cluster{initialKey: cluster},
 			EvaluationsCount: 0,
+			CullingCount:     0,
 		}
 	}
 
@@ -74,14 +91,20 @@ func (s *State) Update(res ObserveResult) (done bool) {
 	}
 	s.EvaluationsCount++
 
-	island := s.Islands[res.Metadata.IslandID]
+	island, ok := s.Islands[res.Metadata.IslandID]
+	if !ok {
+		s.Logger.Printf("error: island with ID %d not found", res.Metadata.IslandID)
+		return false
+	}
+
 	island.EvaluationsCount++ // Increment island-specific evaluation count
 	program := &Program{Skeleton: res.Query, Score: res.Evidence}
+	key := scoreToKey(program.Score)
 
-	if cluster, ok := island.Clusters[program.Score]; ok {
+	if cluster, ok := island.Clusters[key]; ok {
 		cluster.Programs = append(cluster.Programs, program)
 	} else {
-		island.Clusters[program.Score] = &Cluster{
+		island.Clusters[key] = &Cluster{
 			Score:    program.Score,
 			Programs: []*Program{program},
 		}
@@ -96,16 +119,32 @@ func (s *State) Update(res ObserveResult) (done bool) {
 
 // NewRequest generates a new ProposeRequest.
 func (s *State) NewRequest() (ProposeRequest, bool) {
-	// Special handling for the very first request to ensure the process starts correctly.
-	if s.EvaluationsCount == 0 {
-		return ProposeRequest{
-			Parents:  []*Program{{Skeleton: s.InitialSkeleton}, {Skeleton: s.InitialSkeleton}},
-			IslandID: rand.Intn(len(s.Islands)),
-		}, true
+	// Get island IDs to select one randomly
+	islandIDs := make([]int, 0, len(s.Islands))
+	for id := range s.Islands {
+		islandIDs = append(islandIDs, id)
 	}
+	if len(islandIDs) == 0 {
+		return ProposeRequest{}, false // No islands to select from
+	}
+	randomID := islandIDs[rand.Intn(len(islandIDs))]
+	island := s.Islands[randomID]
 
-	// Select one island to perform the evolutionary step, as per the README.
-	island := s.Islands[rand.Intn(len(s.Islands))]
+	// FATAL CHECK: If we select an empty island while others are populated,
+	// it's a critical logic flaw that resets progress.
+	if len(island.Clusters) == 0 {
+		isAnyIslandPopulated := false
+		for _, otherIsland := range s.Islands {
+			if len(otherIsland.Clusters) > 0 {
+				isAnyIslandPopulated = true
+				break
+			}
+		}
+		if isAnyIslandPopulated {
+			s.Logger.Printf("FATAL: Selected an empty island (%d) while other islands are populated. This is an invalid state that resets evolutionary progress.", island.ID)
+			return ProposeRequest{}, false // Stop the process
+		}
+	}
 
 	parentA := s.selectParent(island)
 	parentB := s.selectParent(island)
@@ -118,7 +157,7 @@ func (s *State) NewRequest() (ProposeRequest, bool) {
 
 func (s *State) selectParent(island *Island) *Program {
 	if len(island.Clusters) == 0 {
-		return &Program{Skeleton: s.InitialSkeleton}
+		s.Logger.Fatalf("FATAL: selectParent called on an empty island (ID: %d). This should not happen.", island.ID)
 	}
 
 	// 1. Cluster Selection (Score-based)
@@ -132,16 +171,24 @@ func (s *State) selectParent(island *Island) *Program {
 		tc = Epsilon
 	}
 
+	// Find max score for numerical stability
+	maxScore := clusters[0].Score
+	for _, c := range clusters[1:] {
+		if c.Score > maxScore {
+			maxScore = c.Score
+		}
+	}
+
 	probabilities := make([]float64, len(clusters))
 	sumExp := 0.0
 	for i, cluster := range clusters {
-		expVal := math.Exp(cluster.Score / tc)
+		expVal := math.Exp((cluster.Score - maxScore) / tc)
 		probabilities[i] = expVal
 		sumExp += expVal
 	}
 
 	if sumExp == 0 {
-		sumExp = Epsilon
+		s.Logger.Fatalf("FATAL: sumExp is zero during cluster selection in island %d. All selection probabilities are zero, possibly due to score underflow.", island.ID)
 	}
 
 	for i := range probabilities {
@@ -159,12 +206,12 @@ func (s *State) selectParent(island *Island) *Program {
 		}
 	}
 	if selectedCluster == nil {
-		selectedCluster = clusters[len(clusters)-1]
+		s.Logger.Fatalf("FATAL: Failed to select a cluster in island %d. This indicates a flaw in the probability calculation.", island.ID)
 	}
 
 	// 2. Skeleton Selection (Length-based)
 	if len(selectedCluster.Programs) == 0 {
-		return &Program{Skeleton: s.InitialSkeleton}
+		s.Logger.Fatalf("FATAL: Selected cluster is empty (Island ID: %d, Score: %f). This indicates a logic flaw.", island.ID, selectedCluster.Score)
 	}
 
 	minLength := len(selectedCluster.Programs[0].Skeleton)
@@ -189,7 +236,7 @@ func (s *State) selectParent(island *Island) *Program {
 	}
 
 	if sumExpSkel == 0 {
-		sumExpSkel = Epsilon
+		s.Logger.Fatalf("FATAL: sumExpSkel is zero during skeleton selection in island %d, cluster score %f.", island.ID, selectedCluster.Score)
 	}
 
 	for i := range skelProbs {
@@ -207,7 +254,7 @@ func (s *State) selectParent(island *Island) *Program {
 		}
 	}
 	if selectedProgram == nil {
-		selectedProgram = selectedCluster.Programs[len(selectedCluster.Programs)-1]
+		s.Logger.Fatalf("FATAL: Failed to select a program from cluster in island %d, cluster score %f.", island.ID, selectedCluster.Score)
 	}
 
 	return selectedProgram
@@ -217,43 +264,68 @@ func (s *State) manageIslands() {
 	if len(s.Islands) <= 1 {
 		return
 	}
-	sort.Slice(s.Islands, func(i, j int) bool {
-		return s.Islands[i].getBestScore() < s.Islands[j].getBestScore()
-	})
-	elites := make([]*Program, 0)
-	for i := 0; i < len(s.Islands)-s.NumIslandsToEliminate; i++ {
-		elites = append(elites, s.Islands[i].getBestProgram())
+
+	// Convert map to slice for sorting
+	sortedIslands := make([]*Island, 0, len(s.Islands))
+	for _, island := range s.Islands {
+		sortedIslands = append(sortedIslands, island)
 	}
+
+	sort.Slice(sortedIslands, func(i, j int) bool {
+		return sortedIslands[i].getBestScore() > sortedIslands[j].getBestScore()
+	})
+
+	// Identify elites from surviving islands
+	elites := make([]*Program, 0)
+	numSurvivors := len(sortedIslands) - s.NumIslandsToEliminate
+	for i := 0; i < numSurvivors; i++ {
+		bestProgram := sortedIslands[i].getBestProgram()
+		if bestProgram == nil {
+			s.Logger.Printf("FATAL: Surviving island %d is empty during migration. This indicates a fundamental logic error.", sortedIslands[i].ID)
+			return
+		}
+		elites = append(elites, bestProgram)
+	}
+
 	if len(elites) == 0 {
+		s.Logger.Print("FATAL: No elites found from surviving islands. This should be impossible.")
 		return
 	}
-	for i := 0; i < s.NumIslandsToEliminate; i++ {
-		newIsland := &Island{
-			ID:       s.Islands[len(s.Islands)-1-i].ID,
-			Clusters: make(map[Score]*Cluster),
-		}
+
+	// Replace the worst-performing islands
+	for i := numSurvivors; i < len(sortedIslands); i++ {
+		islandToReplace := sortedIslands[i]
 		elite := elites[rand.Intn(len(elites))]
-		newIsland.Clusters[elite.Score] = &Cluster{Score: elite.Score, Programs: []*Program{elite}}
-		s.Islands[len(s.Islands)-1-i] = newIsland
+		key := scoreToKey(elite.Score)
+		// Preserve and increment the culling count from the old island instance
+		newCullingCount := s.Islands[islandToReplace.ID].CullingCount + 1
+		s.Islands[islandToReplace.ID] = &Island{
+			ID:               islandToReplace.ID,
+			Clusters:         map[string]*Cluster{key: {Score: elite.Score, Programs: []*Program{elite}}},
+			CullingCount:     newCullingCount,
+			EvaluationsCount: 0,
+		}
 	}
 }
 
 func (island *Island) getBestScore() Score {
-	bestScore := 1e9
-	for score := range island.Clusters {
-		if score < bestScore {
-			bestScore = score
+	bestScore := Score(-1e9)
+	for _, cluster := range island.Clusters {
+		if cluster.Score > bestScore {
+			bestScore = cluster.Score
 		}
 	}
 	return bestScore
 }
 
 func (island *Island) getBestProgram() *Program {
-	bestScore := 1e9
+	bestScore := Score(-1e9)
 	var bestProgram *Program
-	for score, cluster := range island.Clusters {
-		if score < bestScore && len(cluster.Programs) > 0 {
-			bestScore = score
+	for _, cluster := range island.Clusters {
+		if cluster.Score > bestScore && len(cluster.Programs) > 0 {
+			bestScore = cluster.Score
+			// To be deterministic, we should have a canonical way to select.
+			// For now, just picking the first one is fine.
 			bestProgram = cluster.Programs[0]
 		}
 	}
@@ -261,10 +333,10 @@ func (island *Island) getBestProgram() *Program {
 }
 
 func (s *State) getBestScore() Score {
-	bestScore := 1e9
+	bestScore := Score(-1e9)
 	for _, island := range s.Islands {
 		islandBest := island.getBestScore()
-		if islandBest < bestScore {
+		if islandBest > bestScore {
 			bestScore = islandBest
 		}
 	}

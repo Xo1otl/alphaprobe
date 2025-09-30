@@ -8,7 +8,8 @@ def handle(request: pb.ProposeRequest, context) -> pb.ProposeResponse:
         context.set_details("No parents provided")
         return pb.ProposeResponse()
 
-    parent_skeleton = request.parents[0].skeleton
+    best_parent = max(request.parents, key=lambda p: p.score)
+    parent_skeleton = best_parent.skeleton
     try:
         val = int(parent_skeleton)
     except ValueError:
@@ -19,8 +20,7 @@ def handle(request: pb.ProposeRequest, context) -> pb.ProposeResponse:
         return pb.ProposeResponse()
 
     new_skeletons = [
-        str(val - 1),
-        str(val + 10),
+        str(val + 1),
+        str(val + 1),
     ]
-
     return pb.ProposeResponse(skeletons=new_skeletons)
