@@ -116,27 +116,24 @@ func (s *State) NewRequest() (ProposeRequest, bool) {
 		}, true
 	}
 
-	parentA := s.selectParent()
-	parentB := s.selectParent()
+	// Select one island to perform the evolutionary step, as per the README.
+	island := s.Islands[rand.Intn(len(s.Islands))]
 
-	// Assign the new request to a random island to encourage diversity.
-	islandID := rand.Intn(len(s.Islands))
+	parentA := s.selectParent(island)
+	parentB := s.selectParent(island)
 
 	return ProposeRequest{
 		Parents:  []*Program{parentA, parentB},
-		IslandID: islandID,
+		IslandID: island.ID,
 	}, true
 }
 
-func (s *State) selectParent() *Program {
-	// 1. Random Island Selection
-	island := s.Islands[rand.Intn(len(s.Islands))]
-
+func (s *State) selectParent(island *Island) *Program {
 	if len(island.Clusters) == 0 {
 		return &Program{Skeleton: s.InitialSkeleton}
 	}
 
-	// 2. Cluster Selection (Score-based)
+	// 1. Cluster Selection (Score-based)
 	clusters := make([]*Cluster, 0, len(island.Clusters))
 	for _, cluster := range island.Clusters {
 		clusters = append(clusters, cluster)
@@ -177,7 +174,7 @@ func (s *State) selectParent() *Program {
 		selectedCluster = clusters[len(clusters)-1]
 	}
 
-	// 3. Skeleton Selection (Length-based)
+	// 2. Skeleton Selection (Length-based)
 	if len(selectedCluster.Programs) == 0 {
 		return &Program{Skeleton: s.InitialSkeleton}
 	}
@@ -284,33 +281,4 @@ func (s *State) getBestScore() Score {
 		}
 	}
 	return bestScore
-}
-
-// --- Types for bilevel Runner ---
-
-type ProposeRequest struct {
-	Parents  []*Program
-	IslandID int
-}
-
-type ProposeResult struct {
-	Skeletons []ProgramSkeleton
-	Metadata  Metadata
-	Err       error
-}
-
-type ObserveRequest struct {
-	Query    ProgramSkeleton
-	Metadata Metadata
-}
-
-type ObserveResult struct {
-	Query    ProgramSkeleton
-	Evidence Score
-	Metadata Metadata
-	Err      error
-}
-
-type Metadata struct {
-	IslandID int
 }
