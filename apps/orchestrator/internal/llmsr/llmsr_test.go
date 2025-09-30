@@ -35,7 +35,12 @@ func TestRunLLMSR_Deterministic(t *testing.T) {
 	logger := log.Default()
 
 	initialSkeleton := "-100"
-	state := NewState(initialSkeleton, maxEvaluations, numIslands, migrationInterval, logger, cancel)
+	fatal := func(err error) {
+		cancel()
+		t.Logf("Fatal error in State: %v", err)
+		t.Fail()
+	}
+	state := NewState(initialSkeleton, maxEvaluations, numIslands, migrationInterval, logger, fatal)
 	adapter := NewAdapter(logger)
 
 	orchestrator := bilevel.NewOrchestrator(
@@ -121,7 +126,12 @@ func TestRunLLMSR_WithGRPCServer(t *testing.T) {
 	// Setup orchestrator
 	logger := log.Default()
 	initialSkeleton := "-100"
-	state := NewState(initialSkeleton, maxEvaluations, numIslands, migrationInterval, logger, cancel)
+	fatal := func(err error) {
+		cancel()
+		t.Logf("Fatal error in State: %v", err)
+		t.Fail()
+	}
+	state := NewState(initialSkeleton, maxEvaluations, numIslands, migrationInterval, logger, fatal)
 	adapter := NewAdapter(logger)
 
 	proposeFn := NewGRPCPropose(client)

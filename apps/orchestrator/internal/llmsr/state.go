@@ -1,7 +1,7 @@
 package llmsr
 
 import (
-	"context"
+	"fmt"
 	"log"
 	"math"
 	"math/rand"
@@ -49,14 +49,14 @@ type State struct {
 	InitialSkeleton       ProgramSkeleton
 	NumIslandsToEliminate int
 	Logger                *log.Logger
-	Cancel                context.CancelFunc
+	Fatal                 func(err error)
 }
 
 // NewState creates a new initial state for the GA.
-func NewState(initialSkeleton ProgramSkeleton, maxEvaluations, numIslands, migrationInterval int, logger *log.Logger, cancel context.CancelFunc) *State {
+func NewState(initialSkeleton ProgramSkeleton, maxEvaluations, numIslands, migrationInterval int, logger *log.Logger, fatal func(err error)) *State {
 	initialScoreVal, err := strconv.ParseFloat(string(initialSkeleton), 64)
 	if err != nil {
-		logger.Fatalf("Could not parse initial skeleton '%s' into a float score: %v", initialSkeleton, err)
+		fatal(fmt.Errorf("could not parse initial skeleton '%s' into a float score: %v", initialSkeleton, err))
 	}
 	initialScore := Score(initialScoreVal)
 
@@ -82,22 +82,20 @@ func NewState(initialSkeleton ProgramSkeleton, maxEvaluations, numIslands, migra
 		InitialSkeleton:       initialSkeleton,
 		NumIslandsToEliminate: numIslands / 2,
 		Logger:                logger,
-		Cancel:                cancel,
+		Fatal:                 fatal,
 	}
 }
 
 // Update incorporates an observation result into the state.
 func (s *State) Update(res ObserveResult) (done bool) {
 	if res.Err != nil {
-		s.Logger.Printf("error in observation: %v", res.Err)
-		return false
+		s.Fatal(fmt.Errorf("error in observation: %v", res.Err))
 	}
 	s.EvaluationsCount++
 
 	island, ok := s.Islands[res.Metadata.IslandID]
 	if !ok {
-		s.Logger.Printf("error: island with ID %d not found", res.Metadata.IslandID)
-		return false
+		s.Fatal(fmt.Errorf("island with ID %d not found", res.Metadata.IslandID))
 	}
 
 	island.EvaluationsCount++ // Increment island-specific evaluation count
@@ -144,9 +142,7 @@ func (s *State) NewRequest() (ProposeRequest, bool) {
 			}
 		}
 		if isAnyIslandPopulated {
-			s.Logger.Printf("FATAL: Selected an empty island (%d) while other islands are populated. This is an invalid state that resets evolutionary progress.", island.ID)
-			s.Cancel()
-			return ProposeRequest{}, false // Stop the process
+			s.Fatal(fmt.Errorf("selected an empty island (%d) while other islands are populated", island.ID))
 		}
 	}
 
@@ -161,8 +157,7 @@ func (s *State) NewRequest() (ProposeRequest, bool) {
 
 func (s *State) selectParent(island *Island) *Program {
 	if len(island.Clusters) == 0 {
-		s.Logger.Printf("FATAL: selectParent called on an empty island (ID: %d). This should not happen.", island.ID)
-		s.Cancel()
+		s.Fatal(fmt.Errorf("selectParent called on empty island %d", island.ID))
 	}
 
 	// 1. Cluster Selection (Score-based)
@@ -193,8 +188,7 @@ func (s *State) selectParent(island *Island) *Program {
 	}
 
 	if sumExp == 0 {
-		s.Logger.Printf("FATAL: sumExp is zero during cluster selection in island %d. All selection probabilities are zero, possibly due to score underflow.", island.ID)
-		s.Cancel()
+		s.Fatal(fmt.Errorf("sumExp is zero during cluster selection in island %d. All selection probabilities are zero, possibly due to score underflow", island.ID))
 	}
 
 	for i := range probabilities {
@@ -212,14 +206,12 @@ func (s *State) selectParent(island *Island) *Program {
 		}
 	}
 	if selectedCluster == nil {
-		s.Logger.Printf("FATAL: Failed to select a cluster in island %d. This indicates a flaw in the probability calculation.", island.ID)
-		s.Cancel()
+		s.Fatal(fmt.Errorf("failed to select a cluster in island %d. This indicates a flaw in the probability calculation", island.ID))
 	}
 
 	// 2. Skeleton Selection (Length-based)
 	if selectedCluster == nil || len(selectedCluster.Programs) == 0 {
-		s.Logger.Printf("FATAL: Selected cluster is nil or empty (Island ID: %d). This indicates a logic flaw.", island.ID)
-		s.Cancel()
+		s.Fatal(fmt.Errorf("selected cluster is nil or empty (Island ID: %d). This indicates a logic flaw", island.ID))
 	}
 
 	minLength := len(selectedCluster.Programs[0].Skeleton)
@@ -244,8 +236,7 @@ func (s *State) selectParent(island *Island) *Program {
 	}
 
 	if sumExpSkel == 0 {
-		s.Logger.Printf("FATAL: sumExpSkel is zero during skeleton selection in island %d, cluster score %f.", island.ID, selectedCluster.Score)
-		s.Cancel()
+		s.Fatal(fmt.Errorf("sumExpSkel is zero during skeleton selection in island %d, cluster score %f", island.ID, selectedCluster.Score))
 	}
 
 	for i := range skelProbs {
@@ -263,8 +254,7 @@ func (s *State) selectParent(island *Island) *Program {
 		}
 	}
 	if selectedProgram == nil {
-		s.Logger.Printf("FATAL: Failed to select a program from cluster in island %d, cluster score %f.", island.ID, selectedCluster.Score)
-		s.Cancel()
+		s.Fatal(fmt.Errorf("failed to select a program from cluster in island %d, cluster score %f", island.ID, selectedCluster.Score))
 	}
 
 	return selectedProgram
@@ -291,15 +281,13 @@ func (s *State) manageIslands() {
 	for i := range numSurvivors {
 		bestProgram := sortedIslands[i].getBestProgram()
 		if bestProgram == nil {
-			s.Logger.Printf("FATAL: Surviving island %d is empty during migration. This indicates a fundamental logic error.", sortedIslands[i].ID)
-			return
+			s.Fatal(fmt.Errorf("surviving island %d is empty during migration", sortedIslands[i].ID))
 		}
 		elites = append(elites, bestProgram)
 	}
 
 	if len(elites) == 0 {
-		s.Logger.Print("FATAL: No elites found from surviving islands. This should be impossible.")
-		return
+		s.Fatal(fmt.Errorf("no elites found from surviving islands. This should be impossible"))
 	}
 
 	// Replace the worst-performing islands
