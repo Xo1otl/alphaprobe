@@ -32,6 +32,10 @@ var (
 	ErrProgramSelectionFailed = errors.New("program selection failed")
 	// ErrInvalidCluster is raised when a selected cluster is found to be nil or empty.
 	ErrInvalidCluster = errors.New("selected cluster is invalid (nil or empty)")
+	// ErrSelectionFromEmptySlice is returned when trying to select from an empty slice.
+	ErrSelectionFromEmptySlice = errors.New("selection from empty slice")
+	// ErrNegativeWeight is returned when a negative weight is provided for selection.
+	ErrNegativeWeight = errors.New("negative weight provided for selection")
 
 	// --- Numerical Stability Errors ---
 

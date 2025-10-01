@@ -22,11 +22,12 @@ const (
 	migrationInterval  = 25
 	proposeConcurrency = 2
 	observeConcurrency = 4
-	testTimeout        = 50 * time.Second
+	testTimeout        = 5 * time.Second
 	initialScore       = -100
+	scoreQuantization  = 4
 )
 
-func TestRunLLMSR_Deterministic(t *testing.T) {
+func TestLLMSR_WithMock(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
@@ -37,7 +38,7 @@ func TestRunLLMSR_Deterministic(t *testing.T) {
 		t.Logf("Fatal error in State: %v", err)
 		t.Fail()
 	}
-	state, err := NewState(initialSkeleton, maxEvaluations, numIslands, migrationInterval, fatal)
+	state, err := NewState(initialSkeleton, maxEvaluations, numIslands, migrationInterval, scoreQuantization, fatal)
 	if err != nil {
 		t.Fatalf("Failed to create initial state: %v", err)
 	}
@@ -65,7 +66,7 @@ func TestRunLLMSR_Deterministic(t *testing.T) {
 	t.Logf("Test finished. Initial score: %d, Best score found: %f", initialScore, state.getBestScore())
 }
 
-func TestRunLLMSR_WithGRPCServer(t *testing.T) {
+func TestLLMSR_WithGRPCServer(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
 
@@ -131,7 +132,7 @@ func TestRunLLMSR_WithGRPCServer(t *testing.T) {
 		t.Logf("Fatal error in State: %v", err)
 		t.Fail()
 	}
-	state, err := NewState(initialSkeleton, maxEvaluations, numIslands, migrationInterval, fatal)
+	state, err := NewState(initialSkeleton, maxEvaluations, numIslands, migrationInterval, scoreQuantization, fatal)
 	if err != nil {
 		t.Fatalf("Failed to create initial state: %v", err)
 	}

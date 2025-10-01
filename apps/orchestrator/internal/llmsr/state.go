@@ -19,9 +19,10 @@ const (
 	Epsilon = 1e-6
 )
 
-// scoreToKey converts a float64 score into a consistent string representation suitable for map keys.
-func scoreToKey(score Score) string {
-	return strconv.FormatFloat(score, 'f', -1, 64)
+// scoreToKey converts a float64 score into a consistent string representation suitable for map keys,
+// applying quantization based on the state's settings.
+func (s *State) scoreToKey(score Score) string {
+	return strconv.FormatFloat(score, 'f', s.ScoreQuantization, 64)
 }
 
 // Cluster groups programs with identical scores.
@@ -36,6 +37,7 @@ type Island struct {
 	Clusters         map[string]*Cluster
 	EvaluationsCount int
 	CullingCount     int
+	BestProgram      *Program // Cache the best program
 }
 
 // State manages the entire population across all islands.
@@ -47,40 +49,44 @@ type State struct {
 	NextMigration         int
 	InitialSkeleton       ProgramSkeleton
 	NumIslandsToEliminate int
+	ScoreQuantization     int
 	Fatal                 func(err error)
 }
 
 // NewState creates a new initial state for the GA.
-func NewState(initialSkeleton ProgramSkeleton, maxEvaluations, numIslands, migrationInterval int, fatal func(err error)) (*State, error) {
+func NewState(initialSkeleton ProgramSkeleton, maxEvaluations, numIslands, migrationInterval, scoreQuantization int, fatal func(err error)) (*State, error) {
 	initialScoreVal, err := strconv.ParseFloat(string(initialSkeleton), 64)
 	if err != nil {
 		return nil, err
 	}
 	initialScore := Score(initialScoreVal)
 
-	islands := make(map[int]*Island, numIslands)
-	for i := range numIslands {
-		program := &Program{Skeleton: initialSkeleton, Score: initialScore}
-		cluster := &Cluster{Score: initialScore, Programs: []*Program{program}}
-		initialKey := scoreToKey(initialScore)
-		islands[i] = &Island{
-			ID:               i,
-			Clusters:         map[string]*Cluster{initialKey: cluster},
-			EvaluationsCount: 0,
-			CullingCount:     0,
-		}
-	}
-
-	return &State{
-		Islands:               islands,
+	s := &State{
+		Islands:               make(map[int]*Island, numIslands),
 		MaxEvaluations:        maxEvaluations,
 		EvaluationsCount:      0,
 		MigrationInterval:     migrationInterval,
 		NextMigration:         migrationInterval,
 		InitialSkeleton:       initialSkeleton,
 		NumIslandsToEliminate: numIslands / 2,
+		ScoreQuantization:     scoreQuantization,
 		Fatal:                 fatal,
-	}, nil
+	}
+
+	for i := range numIslands {
+		program := &Program{Skeleton: initialSkeleton, Score: initialScore}
+		cluster := &Cluster{Score: initialScore, Programs: []*Program{program}}
+		initialKey := s.scoreToKey(initialScore)
+		s.Islands[i] = &Island{
+			ID:               i,
+			Clusters:         map[string]*Cluster{initialKey: cluster},
+			EvaluationsCount: 0,
+			CullingCount:     0,
+			BestProgram:      program, // Initialize the cache
+		}
+	}
+
+	return s, nil
 }
 
 // Update incorporates an observation result into the state.
@@ -97,7 +103,13 @@ func (s *State) Update(res ObserveResult) (done bool) {
 
 	island.EvaluationsCount++ // Increment island-specific evaluation count
 	program := &Program{Skeleton: res.Query, Score: res.Evidence}
-	key := scoreToKey(program.Score)
+
+	// Update the cache if the new program is better
+	if program.isBetterThan(island.BestProgram) {
+		island.BestProgram = program
+	}
+
+	key := s.scoreToKey(program.Score)
 
 	if cluster, ok := island.Clusters[key]; ok {
 		cluster.Programs = append(cluster.Programs, program)
@@ -163,95 +175,43 @@ func (s *State) selectParent(island *Island) *Program {
 		clusters = append(clusters, cluster)
 	}
 
-	tc := T0 * (1 - float64(island.EvaluationsCount%N)/float64(N))
-	if tc < Epsilon {
-		tc = Epsilon
-	}
+	tc := T0*(1-float64(island.EvaluationsCount%N)/float64(N)) + Epsilon
+	maxScore := island.getBestScore() // More efficient way to get max score
 
-	// Find max score for numerical stability
-	maxScore := clusters[0].Score
-	for _, c := range clusters[1:] {
-		if c.Score > maxScore {
-			maxScore = c.Score
-		}
+	clusterWeightFunc := func(c *Cluster) float64 {
+		return math.Exp((c.Score - maxScore) / tc)
 	}
-
-	probabilities := make([]float64, len(clusters))
-	sumExp := 0.0
-	for i, cluster := range clusters {
-		expVal := math.Exp((cluster.Score - maxScore) / tc)
-		probabilities[i] = expVal
-		sumExp += expVal
-	}
-
-	if sumExp == 0 {
-		s.Fatal(fmt.Errorf("sumExp is zero during cluster selection in island %d. All selection probabilities are zero, possibly due to score underflow", island.ID))
-	}
-
-	for i := range probabilities {
-		probabilities[i] /= sumExp
-	}
-
-	randVal := rand.Float64()
-	cumulativeProb := 0.0
-	var selectedCluster *Cluster
-	for i, prob := range probabilities {
-		cumulativeProb += prob
-		if randVal <= cumulativeProb {
-			selectedCluster = clusters[i]
-			break
-		}
-	}
-	if selectedCluster == nil {
-		s.Fatal(fmt.Errorf("failed to select a cluster in island %d. This indicates a flaw in the probability calculation", island.ID))
+	selectedCluster, err := weightedChoice(clusters, clusterWeightFunc)
+	if err != nil {
+		s.Fatal(fmt.Errorf("cluster selection failed in island %d: %w", island.ID, err))
 	}
 
 	// 2. Skeleton Selection (Length-based)
-	if selectedCluster == nil || len(selectedCluster.Programs) == 0 {
-		s.Fatal(fmt.Errorf("selected cluster is nil or empty (Island ID: %d). This indicates a logic flaw", island.ID))
+	programs := selectedCluster.Programs
+	if len(programs) == 0 {
+		s.Fatal(fmt.Errorf("%w in island %d", ErrInvalidCluster, island.ID))
 	}
 
-	minLength := len(selectedCluster.Programs[0].Skeleton)
-	maxLength := len(selectedCluster.Programs[0].Skeleton)
-	for _, program := range selectedCluster.Programs {
-		length := len(program.Skeleton)
-		if length < minLength {
-			minLength = length
+	minLength := len(programs[0].Skeleton)
+	maxLength := len(programs[0].Skeleton)
+	for _, p := range programs[1:] {
+		l := len(p.Skeleton)
+		if l < minLength {
+			minLength = l
 		}
-		if length > maxLength {
-			maxLength = length
-		}
-	}
-
-	skelProbs := make([]float64, len(selectedCluster.Programs))
-	sumExpSkel := 0.0
-	for i, program := range selectedCluster.Programs {
-		normalizedLength := float64(len(program.Skeleton)-minLength) / (float64(maxLength-minLength) + Epsilon)
-		expVal := math.Exp(-normalizedLength / Tp)
-		skelProbs[i] = expVal
-		sumExpSkel += expVal
-	}
-
-	if sumExpSkel == 0 {
-		s.Fatal(fmt.Errorf("sumExpSkel is zero during skeleton selection in island %d, cluster score %f", island.ID, selectedCluster.Score))
-	}
-
-	for i := range skelProbs {
-		skelProbs[i] /= sumExpSkel
-	}
-
-	randValSkel := rand.Float64()
-	cumulativeProbSkel := 0.0
-	var selectedProgram *Program
-	for i, prob := range skelProbs {
-		cumulativeProbSkel += prob
-		if randValSkel <= cumulativeProbSkel {
-			selectedProgram = selectedCluster.Programs[i]
-			break
+		if l > maxLength {
+			maxLength = l
 		}
 	}
-	if selectedProgram == nil {
-		s.Fatal(fmt.Errorf("failed to select a program from cluster in island %d, cluster score %f", island.ID, selectedCluster.Score))
+
+	lengthRange := float64(maxLength-minLength) + Epsilon
+	skeletonWeightFunc := func(p *Program) float64 {
+		normalizedLength := float64(len(p.Skeleton)-minLength) / lengthRange
+		return math.Exp(-normalizedLength / Tp)
+	}
+	selectedProgram, err := weightedChoice(programs, skeletonWeightFunc)
+	if err != nil {
+		s.Fatal(fmt.Errorf("program selection failed from cluster with score %f in island %d: %w", selectedCluster.Score, island.ID, err))
 	}
 
 	return selectedProgram
@@ -278,20 +238,20 @@ func (s *State) manageIslands() {
 	for i := range numSurvivors {
 		bestProgram := sortedIslands[i].getBestProgram()
 		if bestProgram == nil {
-			s.Fatal(fmt.Errorf("surviving island %d is empty during migration", sortedIslands[i].ID))
+			s.Fatal(fmt.Errorf("%w: island %d", ErrEmptySurvivorIsland, sortedIslands[i].ID))
 		}
 		elites = append(elites, bestProgram)
 	}
 
 	if len(elites) == 0 {
-		s.Fatal(fmt.Errorf("no elites found from surviving islands. This should be impossible"))
+		s.Fatal(fmt.Errorf("%w: this should be impossible", ErrNoElitesFound))
 	}
 
 	// Replace the worst-performing islands
 	for i := numSurvivors; i < len(sortedIslands); i++ {
 		islandToReplace := sortedIslands[i]
 		elite := elites[rand.Intn(len(elites))]
-		key := scoreToKey(elite.Score)
+		key := s.scoreToKey(elite.Score)
 		// Preserve and increment the culling count from the old island instance
 		newCullingCount := s.Islands[islandToReplace.ID].CullingCount + 1
 		s.Islands[islandToReplace.ID] = &Island{
@@ -299,32 +259,17 @@ func (s *State) manageIslands() {
 			Clusters:         map[string]*Cluster{key: {Score: elite.Score, Programs: []*Program{elite}}},
 			CullingCount:     newCullingCount,
 			EvaluationsCount: 0,
+			BestProgram:      elite, // Seed the cache with the elite
 		}
 	}
 }
 
 func (island *Island) getBestScore() Score {
-	bestScore := Score(-1e9)
-	for _, cluster := range island.Clusters {
-		if cluster.Score > bestScore {
-			bestScore = cluster.Score
-		}
-	}
-	return bestScore
+	return island.BestProgram.Score
 }
 
 func (island *Island) getBestProgram() *Program {
-	bestScore := Score(-1e9)
-	var bestProgram *Program
-	for _, cluster := range island.Clusters {
-		if cluster.Score > bestScore && len(cluster.Programs) > 0 {
-			bestScore = cluster.Score
-			// To be deterministic, we should have a canonical way to select.
-			// For now, just picking the first one is fine.
-			bestProgram = cluster.Programs[0]
-		}
-	}
-	return bestProgram
+	return island.BestProgram
 }
 
 func (s *State) getBestScore() Score {
@@ -336,4 +281,39 @@ func (s *State) getBestScore() Score {
 		}
 	}
 	return bestScore
+}
+
+// weightedChoice performs a weighted random selection from a slice of items.
+// It takes a slice and a function that returns the weight for each item.
+func weightedChoice[T any](items []T, getWeight func(T) float64) (T, error) {
+	var zero T
+	if len(items) == 0 {
+		return zero, ErrSelectionFromEmptySlice
+	}
+
+	weights := make([]float64, len(items))
+	sumWeights := 0.0
+	for i, item := range items {
+		w := getWeight(item)
+		if w < 0 { // Weights must be non-negative
+			return zero, ErrNegativeWeight
+		}
+		weights[i] = w
+		sumWeights += w
+	}
+
+	if sumWeights <= Epsilon {
+		return zero, ErrNumericalInstability
+	}
+
+	randVal := rand.Float64() * sumWeights
+	cumulativeWeight := 0.0
+	for i, w := range weights {
+		cumulativeWeight += w
+		if randVal <= cumulativeWeight {
+			return items[i], nil
+		}
+	}
+
+	return items[len(items)-1], nil // Fallback for floating-point inaccuracies
 }

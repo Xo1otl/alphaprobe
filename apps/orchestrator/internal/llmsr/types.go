@@ -16,14 +16,14 @@ type ProposeResult struct {
 type ObserveRequest struct {
 	Query    ProgramSkeleton
 	Metadata Metadata
-	Err      error // Proposeで発生したエラーを伝搬するためのフィールド
+	Err      error
 }
 
 type ObserveResult struct {
 	Query    ProgramSkeleton
 	Evidence Score
 	Metadata Metadata
-	Err      error // Proposeで発生したエラーか、Observeで発生したエラーが入る
+	Err      error
 }
 
 type Metadata struct {
@@ -37,4 +37,16 @@ type Score = float64
 type Program struct {
 	Skeleton ProgramSkeleton
 	Score    Score
+}
+
+// isBetterThan compares program p with other, returning true if p is strictly better.
+// Tie-breaking is done by shorter length, then lexicographically.
+func (p *Program) isBetterThan(other *Program) bool {
+	if p.Score != other.Score {
+		return p.Score > other.Score
+	}
+	if len(p.Skeleton) != len(other.Skeleton) {
+		return len(p.Skeleton) < len(other.Skeleton)
+	}
+	return p.Skeleton < other.Skeleton
 }
