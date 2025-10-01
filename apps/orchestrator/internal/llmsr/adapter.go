@@ -1,22 +1,18 @@
 package llmsr
 
-import "log"
-
 type Adapter struct {
-	queue  []ObserveRequest
-	Logger *log.Logger
+	queue []ObserveRequest
 }
 
-func NewAdapter(logger *log.Logger) *Adapter {
+func NewAdapter() *Adapter {
 	return &Adapter{
-		queue:  make([]ObserveRequest, 0),
-		Logger: logger,
+		queue: make([]ObserveRequest, 0),
 	}
 }
 
 func (a *Adapter) Recv(res ProposeResult) {
 	if res.Err != nil {
-		a.Logger.Printf("error in proposal: %v", res.Err)
+		a.queue = append(a.queue, ObserveRequest{Metadata: res.Metadata, Err: res.Err})
 		return
 	}
 	for _, skeleton := range res.Skeletons {

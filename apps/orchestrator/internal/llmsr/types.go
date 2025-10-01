@@ -16,13 +16,14 @@ type ProposeResult struct {
 type ObserveRequest struct {
 	Query    ProgramSkeleton
 	Metadata Metadata
+	Err      error // Proposeで発生したエラーを伝搬するためのフィールド
 }
 
 type ObserveResult struct {
 	Query    ProgramSkeleton
 	Evidence Score
 	Metadata Metadata
-	Err      error
+	Err      error // Proposeで発生したエラーか、Observeで発生したエラーが入る
 }
 
 type Metadata struct {

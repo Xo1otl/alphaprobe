@@ -2,7 +2,6 @@ package llmsr
 
 import (
 	"fmt"
-	"log"
 	"math"
 	"math/rand"
 	"sort"
@@ -48,15 +47,14 @@ type State struct {
 	NextMigration         int
 	InitialSkeleton       ProgramSkeleton
 	NumIslandsToEliminate int
-	Logger                *log.Logger
 	Fatal                 func(err error)
 }
 
 // NewState creates a new initial state for the GA.
-func NewState(initialSkeleton ProgramSkeleton, maxEvaluations, numIslands, migrationInterval int, logger *log.Logger, fatal func(err error)) *State {
+func NewState(initialSkeleton ProgramSkeleton, maxEvaluations, numIslands, migrationInterval int, fatal func(err error)) (*State, error) {
 	initialScoreVal, err := strconv.ParseFloat(string(initialSkeleton), 64)
 	if err != nil {
-		fatal(fmt.Errorf("could not parse initial skeleton '%s' into a float score: %v", initialSkeleton, err))
+		return nil, err
 	}
 	initialScore := Score(initialScoreVal)
 
@@ -81,9 +79,8 @@ func NewState(initialSkeleton ProgramSkeleton, maxEvaluations, numIslands, migra
 		NextMigration:         migrationInterval,
 		InitialSkeleton:       initialSkeleton,
 		NumIslandsToEliminate: numIslands / 2,
-		Logger:                logger,
 		Fatal:                 fatal,
-	}
+	}, nil
 }
 
 // Update incorporates an observation result into the state.
@@ -95,7 +92,7 @@ func (s *State) Update(res ObserveResult) (done bool) {
 
 	island, ok := s.Islands[res.Metadata.IslandID]
 	if !ok {
-		s.Fatal(fmt.Errorf("island with ID %d not found", res.Metadata.IslandID))
+		s.Fatal(fmt.Errorf("%w: island with ID %d", ErrIslandNotFound, res.Metadata.IslandID))
 	}
 
 	island.EvaluationsCount++ // Increment island-specific evaluation count
@@ -142,7 +139,7 @@ func (s *State) NewRequest() (ProposeRequest, bool) {
 			}
 		}
 		if isAnyIslandPopulated {
-			s.Fatal(fmt.Errorf("selected an empty island (%d) while other islands are populated", island.ID))
+			s.Fatal(fmt.Errorf("%w: island %d", ErrEmptyIslandSelected, island.ID))
 		}
 	}
 
@@ -157,7 +154,7 @@ func (s *State) NewRequest() (ProposeRequest, bool) {
 
 func (s *State) selectParent(island *Island) *Program {
 	if len(island.Clusters) == 0 {
-		s.Fatal(fmt.Errorf("selectParent called on empty island %d", island.ID))
+		s.Fatal(fmt.Errorf("%w: island %d", ErrSelectionFromEmptyIsland, island.ID))
 	}
 
 	// 1. Cluster Selection (Score-based)

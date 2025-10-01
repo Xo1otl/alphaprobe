@@ -2,7 +2,7 @@ package llmsr
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"strconv"
 
 	"alphaprobe/orchestrator/internal/pb"
@@ -13,7 +13,7 @@ func MockPropose(ctx context.Context, req ProposeRequest) ProposeResult {
 	// time.Sleep(time.Duration(rand.Intn(10)) * time.Millisecond)
 
 	if len(req.Parents) == 0 {
-		return ProposeResult{Err: errors.New("no parents provided")}
+		return ProposeResult{Err: fmt.Errorf("no parents provided: %w", ErrInPropose)}
 	}
 
 	bestParent := req.Parents[0]
@@ -26,7 +26,7 @@ func MockPropose(ctx context.Context, req ProposeRequest) ProposeResult {
 	parentSkeleton := bestParent.Skeleton
 	val, err := strconv.Atoi(parentSkeleton)
 	if err != nil {
-		return ProposeResult{Err: err}
+		return ProposeResult{Err: fmt.Errorf("invalid parent skeleton (%v): %w", err, ErrInPropose)}
 	}
 
 	newSkeletons := []ProgramSkeleton{
@@ -51,7 +51,7 @@ func NewGRPCPropose(client pb.LLMSRClient) func(context.Context, ProposeRequest)
 		pbReq := &pb.ProposeRequest{Parents: pbParents}
 		resp, err := client.Propose(ctx, pbReq)
 		if err != nil {
-			return ProposeResult{Err: err}
+			return ProposeResult{Err: fmt.Errorf("gRPC propose error (%v): %w", err, ErrInPropose)}
 		}
 
 		skeletons := make([]ProgramSkeleton, len(resp.Skeletons))

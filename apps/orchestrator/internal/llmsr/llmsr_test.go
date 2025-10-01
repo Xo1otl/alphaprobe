@@ -5,7 +5,6 @@ import (
 	"alphaprobe/orchestrator/internal/pb"
 	"bufio"
 	"context"
-	"log"
 	"os/exec"
 	"sort"
 	"strings"
@@ -32,16 +31,18 @@ func TestRunLLMSR_Deterministic(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
 
-	logger := log.Default()
-
 	initialSkeleton := "-100"
 	fatal := func(err error) {
 		cancel()
 		t.Logf("Fatal error in State: %v", err)
 		t.Fail()
 	}
-	state := NewState(initialSkeleton, maxEvaluations, numIslands, migrationInterval, logger, fatal)
-	adapter := NewAdapter(logger)
+	state, err := NewState(initialSkeleton, maxEvaluations, numIslands, migrationInterval, fatal)
+	if err != nil {
+		t.Fatalf("Failed to create initial state: %v", err)
+	}
+
+	adapter := NewAdapter()
 
 	orchestrator := bilevel.NewOrchestrator(
 		MockPropose,
@@ -124,15 +125,18 @@ func TestRunLLMSR_WithGRPCServer(t *testing.T) {
 	client := pb.NewLLMSRClient(conn)
 
 	// Setup orchestrator
-	logger := log.Default()
 	initialSkeleton := "-100"
 	fatal := func(err error) {
 		cancel()
 		t.Logf("Fatal error in State: %v", err)
 		t.Fail()
 	}
-	state := NewState(initialSkeleton, maxEvaluations, numIslands, migrationInterval, logger, fatal)
-	adapter := NewAdapter(logger)
+	state, err := NewState(initialSkeleton, maxEvaluations, numIslands, migrationInterval, fatal)
+	if err != nil {
+		t.Fatalf("Failed to create initial state: %v", err)
+	}
+
+	adapter := NewAdapter()
 
 	proposeFn := NewGRPCPropose(client)
 	observeFn := NewGRPCObserve(client)
