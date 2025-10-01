@@ -24,7 +24,7 @@ const (
 	observeConcurrency = 4
 	testTimeout        = 5 * time.Second
 	initialScore       = -100
-	scoreQuantization  = 4
+	scoreQuantization  = 1
 )
 
 func TestLLMSR_WithMock(t *testing.T) {
