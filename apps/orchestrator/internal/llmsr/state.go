@@ -53,7 +53,7 @@ func NewState(initialSkeleton Skeleton, initialScore ProgramScore, maxEvaluation
 
 func (s *State) Update(res ObserveResult) (done bool, err error) {
 	if res.Err != nil {
-		return true, fmt.Errorf("error in observation: %v", res.Err)
+		return true, res.Err
 	}
 	s.EvaluationsCount++
 
@@ -64,12 +64,12 @@ func (s *State) Update(res ObserveResult) (done bool, err error) {
 
 	program := &Program{Skeleton: res.Query, Score: res.Evidence}
 	if err := island.addProgram(program, s.ScoreQuantization); err != nil {
-		return true, fmt.Errorf("failed to add program: %w", err)
+		return true, err
 	}
 
 	if s.EvaluationsCount >= s.NextMigration {
 		if err := s.manageIslands(); err != nil {
-			return true, fmt.Errorf("failed to manage islands: %w", err)
+			return true, err
 		}
 		s.NextMigration += s.MigrationInterval
 	}
@@ -97,11 +97,11 @@ func (s *State) NewRequest() (ProposeRequest, bool, error) {
 
 	parent1, err := s.selectParent(island)
 	if err != nil {
-		return ProposeRequest{}, false, fmt.Errorf("failed to select parent: %w", err)
+		return ProposeRequest{}, false, err
 	}
 	parent2, err := s.selectParent(island)
 	if err != nil {
-		return ProposeRequest{}, false, fmt.Errorf("failed to select parent: %w", err)
+		return ProposeRequest{}, false, err
 	}
 
 	return ProposeRequest{
