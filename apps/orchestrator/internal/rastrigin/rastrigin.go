@@ -63,7 +63,7 @@ func NewState(
 	}
 }
 
-func (s *State) Update(res ObserveResult) (done bool) {
+func (s *State) Update(res ObserveResult) (done bool, err error) {
 	islandID := res.Metadata.IslandID
 	evaluatedChild := Individual{Gene: res.Gene, Fitness: res.Fitness}
 
@@ -77,12 +77,12 @@ func (s *State) Update(res ObserveResult) (done bool) {
 		migrate(s.Islands, s.MigrationSize)
 	}
 
-	return s.EvaluationsCount >= s.TotalEvaluations
+	return s.EvaluationsCount >= s.TotalEvaluations, nil
 }
 
-func (s *State) NewRequest() (*Island, bool) {
+func (s *State) NewRequest() (*Island, bool, error) {
 	if len(s.AvailableIslandIDs) == 0 {
-		return nil, false
+		return nil, false, nil
 	}
 	randIndex := rand.Intn(len(s.AvailableIslandIDs))
 	islandID := s.AvailableIslandIDs[randIndex]
@@ -92,7 +92,7 @@ func (s *State) NewRequest() (*Island, bool) {
 	// Add the ID to PendingIslands
 	s.PendingIslands[islandID] = true
 
-	return s.Islands[islandID], true
+	return s.Islands[islandID], true, nil
 }
 
 // --- Types for bilevel Runner ---

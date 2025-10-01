@@ -8,13 +8,6 @@ import (
 	"strconv"
 )
 
-type Logger interface {
-	Info(v ...any)
-	Debug(v ...any)
-	// Fatal logs an error and is expected to trigger a program shutdown.
-	Fatal(v ...any)
-}
-
 type State struct {
 	Islands               map[int]*Island
 	MaxEvaluations        int
@@ -24,10 +17,9 @@ type State struct {
 	InitialSkeleton       Skeleton
 	NumIslandsToEliminate int
 	ScoreQuantization     int
-	Log                   Logger
 }
 
-func NewState(initialSkeleton Skeleton, initialScore ProgramScore, maxEvaluations, numIslands, migrationInterval, scoreQuantization int, eliminationRate float64, log Logger) (*State, error) {
+func NewState(initialSkeleton Skeleton, initialScore ProgramScore, maxEvaluations, numIslands, migrationInterval, scoreQuantization int, eliminationRate float64) (*State, error) {
 	if eliminationRate < 0 || eliminationRate >= 1 {
 		return nil, fmt.Errorf("%w", ErrInvalidEliminationRate)
 	}
@@ -39,7 +31,6 @@ func NewState(initialSkeleton Skeleton, initialScore ProgramScore, maxEvaluation
 		InitialSkeleton:       initialSkeleton,
 		NumIslandsToEliminate: int(float64(numIslands) * eliminationRate),
 		ScoreQuantization:     scoreQuantization,
-		Log:                   log,
 	}
 
 	initialClusterScore, err := quantize(initialScore, s.ScoreQuantization)
@@ -60,42 +51,38 @@ func NewState(initialSkeleton Skeleton, initialScore ProgramScore, maxEvaluation
 	return s, nil
 }
 
-func (s *State) Update(res ObserveResult) (done bool) {
+func (s *State) Update(res ObserveResult) (done bool, err error) {
 	if res.Err != nil {
-		s.Log.Fatal(fmt.Errorf("error in observation: %v", res.Err))
-		return true
+		return true, fmt.Errorf("error in observation: %v", res.Err)
 	}
 	s.EvaluationsCount++
 
 	island, ok := s.Islands[res.Metadata.IslandID]
 	if !ok {
-		s.Log.Fatal(fmt.Errorf("%w: island with ID %d", ErrIslandNotFound, res.Metadata.IslandID))
-		return true
+		return true, fmt.Errorf("%w: island with ID %d", ErrIslandNotFound, res.Metadata.IslandID)
 	}
 
 	program := &Program{Skeleton: res.Query, Score: res.Evidence}
 	if err := island.addProgram(program, s.ScoreQuantization); err != nil {
-		s.Log.Fatal(fmt.Errorf("failed to add program: %w", err))
-		return true
+		return true, fmt.Errorf("failed to add program: %w", err)
 	}
 
 	if s.EvaluationsCount >= s.NextMigration {
 		if err := s.manageIslands(); err != nil {
-			s.Log.Fatal(fmt.Errorf("failed to manage islands: %w", err))
-			return true
+			return true, fmt.Errorf("failed to manage islands: %w", err)
 		}
 		s.NextMigration += s.MigrationInterval
 	}
-	return s.EvaluationsCount >= s.MaxEvaluations
+	return s.EvaluationsCount >= s.MaxEvaluations, nil
 }
 
-func (s *State) NewRequest() (ProposeRequest, bool) {
+func (s *State) NewRequest() (ProposeRequest, bool, error) {
 	islandIDs := make([]int, 0, len(s.Islands))
 	for id := range s.Islands {
 		islandIDs = append(islandIDs, id)
 	}
 	if len(islandIDs) == 0 {
-		return ProposeRequest{}, false
+		return ProposeRequest{}, false, nil
 	}
 	randomID := islandIDs[rand.Intn(len(islandIDs))]
 	island := s.Islands[randomID]
@@ -103,27 +90,24 @@ func (s *State) NewRequest() (ProposeRequest, bool) {
 	if len(island.Clusters) == 0 {
 		for _, otherIsland := range s.Islands {
 			if len(otherIsland.Clusters) > 0 {
-				s.Log.Fatal(fmt.Errorf("%w: island %d", ErrEmptyIslandSelected, island.ID))
-				return ProposeRequest{}, false
+				return ProposeRequest{}, false, fmt.Errorf("%w: island %d", ErrEmptyIslandSelected, island.ID)
 			}
 		}
 	}
 
 	parent1, err := s.selectParent(island)
 	if err != nil {
-		s.Log.Fatal(fmt.Errorf("failed to select parent: %w", err))
-		return ProposeRequest{}, false
+		return ProposeRequest{}, false, fmt.Errorf("failed to select parent: %w", err)
 	}
 	parent2, err := s.selectParent(island)
 	if err != nil {
-		s.Log.Fatal(fmt.Errorf("failed to select parent: %w", err))
-		return ProposeRequest{}, false
+		return ProposeRequest{}, false, fmt.Errorf("failed to select parent: %w", err)
 	}
 
 	return ProposeRequest{
 		Parents:  []*Program{parent1, parent2},
 		IslandID: island.ID,
-	}, true
+	}, true, nil
 }
 
 func (s *State) selectParent(island *Island) (*Program, error) {

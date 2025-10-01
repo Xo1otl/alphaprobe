@@ -95,8 +95,7 @@ func runLLMSRTest(t *testing.T, proposeFn bilevel.ProposeFunc[ProposeRequest, Pr
 
 	initialSkeleton := "-100"
 	initialScore := observeFn(ctx, ObserveRequest{Query: Skeleton(initialSkeleton)}).Evidence
-	log := &TestLogger{}
-	state, err := NewState(initialSkeleton, initialScore, maxEvaluations, numIslands, migrationInterval, scoreQuantization, eliminationRate, log)
+	state, err := NewState(initialSkeleton, initialScore, maxEvaluations, numIslands, migrationInterval, scoreQuantization, eliminationRate)
 	if err != nil {
 		t.Fatalf("Failed to create initial state: %v", err)
 	}
@@ -110,7 +109,16 @@ func runLLMSRTest(t *testing.T, proposeFn bilevel.ProposeFunc[ProposeRequest, Pr
 		observeConcurrency,
 	)
 
-	bilevel.RunWithAdapter(orchestrator, ctx, state, adapter)
+	errCh := make(chan error, 1)
+	go func() {
+		err, ok := <-errCh
+		if ok {
+			t.Logf("Test context canceled by error: %v", err)
+			cancel()
+		}
+	}()
+
+	bilevel.RunWithAdapter(orchestrator, ctx, state, adapter, errCh)
 
 	if ctx.Err() == context.DeadlineExceeded {
 		t.Fatal("Test timed out, indicating a potential deadlock or server issue.")
@@ -177,20 +185,4 @@ func getBestScore(s *State) ProgramScore {
 		}
 	}
 	return bestScore
-}
-
-type TestLogger struct {
-	cancel context.CancelFunc
-}
-
-func NewTestLogger(cancel context.CancelFunc) *TestLogger {
-	return &TestLogger{cancel}
-}
-
-func (l *TestLogger) Info(v ...any) {
-}
-func (l *TestLogger) Debug(v ...any) {
-}
-func (l *TestLogger) Fatal(v ...any) {
-	l.cancel()
 }

@@ -18,8 +18,8 @@ func TestRastriginWithRunner(t *testing.T) {
 		totalEvaluations   = 250000
 		migrationInterval  = 25
 		migrationSize      = 5
-		proposeConcurrency = 5
-		observeConcurrency = 5
+		proposeConcurrency = 2
+		observeConcurrency = 4
 		testTimeout        = 5 * time.Second
 	)
 
@@ -41,7 +41,16 @@ func TestRastriginWithRunner(t *testing.T) {
 		observeConcurrency,
 	)
 
-	bilevel.Run(orchestrator, ctx, state)
+	errCh := make(chan error, 1)
+	go func() {
+		err, ok := <-errCh
+		if ok {
+			t.Logf("Test context canceled by error: %v", err)
+			cancel()
+		}
+	}()
+
+	bilevel.Run(orchestrator, ctx, state, errCh)
 
 	if ctx.Err() == context.DeadlineExceeded {
 		t.Fatal("Test timed out, indicating a potential deadlock.")
