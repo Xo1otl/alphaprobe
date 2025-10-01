@@ -23,8 +23,7 @@ const (
 	proposeConcurrency = 2
 	observeConcurrency = 4
 	testTimeout        = 5 * time.Second
-	initialScore       = -100
-	scoreQuantization  = 1
+	scoreQuantization  = 2
 )
 
 func TestLLMSR_WithMock(t *testing.T) {
@@ -33,15 +32,13 @@ func TestLLMSR_WithMock(t *testing.T) {
 	defer cancel()
 
 	initialSkeleton := "-100"
+	initialScore := MockObserve(ctx, ObserveRequest{Query: Skeleton(initialSkeleton)}).Evidence
 	fatal := func(err error) {
 		cancel()
 		t.Logf("Fatal error in State: %v", err)
 		t.Fail()
 	}
-	state, err := NewState(initialSkeleton, maxEvaluations, numIslands, migrationInterval, scoreQuantization, fatal)
-	if err != nil {
-		t.Fatalf("Failed to create initial state: %v", err)
-	}
+	state := NewState(initialSkeleton, initialScore, maxEvaluations, numIslands, migrationInterval, scoreQuantization, fatal)
 
 	adapter := NewAdapter()
 
@@ -58,12 +55,12 @@ func TestLLMSR_WithMock(t *testing.T) {
 		t.Fatal("Test timed out, indicating a potential deadlock.")
 	}
 
-	logStateSummary(t, state, initialScore)
+	logStateSummary(t, state, float64(initialScore))
 
 	assert.True(t, state.EvaluationsCount >= maxEvaluations, "Should have completed at least the specified number of evaluations")
-	assert.Greater(t, state.getBestScore(), float64(initialScore), "The final best score should be better (greater) than the initial score")
+	assert.Greater(t, float64(getBestScore(state)), float64(initialScore), "The final best score should be better (greater) than the initial score")
 
-	t.Logf("Test finished. Initial score: %d, Best score found: %f", initialScore, state.getBestScore())
+	t.Logf("Test finished. Initial score: %f, Best score found: %f", float64(initialScore), float64(getBestScore(state)))
 }
 
 func TestLLMSR_WithGRPCServer(t *testing.T) {
@@ -124,23 +121,23 @@ func TestLLMSR_WithGRPCServer(t *testing.T) {
 	defer conn.Close()
 
 	client := pb.NewLLMSRClient(conn)
+	proposeFn := NewGRPCPropose(client)
+	observeFn := NewGRPCObserve(client)
 
 	// Setup orchestrator
 	initialSkeleton := "-100"
+	initialScore := observeFn(ctx, ObserveRequest{Query: Skeleton(initialSkeleton)}).Evidence
 	fatal := func(err error) {
 		cancel()
 		t.Logf("Fatal error in State: %v", err)
 		t.Fail()
 	}
-	state, err := NewState(initialSkeleton, maxEvaluations, numIslands, migrationInterval, scoreQuantization, fatal)
+	state := NewState(initialSkeleton, initialScore, maxEvaluations, numIslands, migrationInterval, scoreQuantization, fatal)
 	if err != nil {
 		t.Fatalf("Failed to create initial state: %v", err)
 	}
 
 	adapter := NewAdapter()
-
-	proposeFn := NewGRPCPropose(client)
-	observeFn := NewGRPCObserve(client)
 
 	orchestrator := bilevel.NewOrchestrator(
 		proposeFn,
@@ -156,12 +153,12 @@ func TestLLMSR_WithGRPCServer(t *testing.T) {
 		t.Fatal("Test timed out, indicating a potential deadlock or server issue.")
 	}
 
-	logStateSummary(t, state, initialScore)
+	logStateSummary(t, state, float64(initialScore))
 
 	assert.True(t, state.EvaluationsCount >= maxEvaluations, "Should have completed at least the specified number of evaluations")
-	assert.Greater(t, state.getBestScore(), float64(initialScore), "The final best score should be better (greater) than the initial score")
+	assert.Greater(t, float64(getBestScore(state)), float64(initialScore), "The final best score should be better (greater) than the initial score")
 
-	t.Logf("Test finished. Initial score: %d, Best score found: %f", initialScore, state.getBestScore())
+	t.Logf("Test finished. Initial score: %f, Best score found: %f", float64(initialScore), float64(getBestScore(state)))
 }
 
 func logStateSummary(t *testing.T, state *State, initialScore float64) {
@@ -185,8 +182,8 @@ func logStateSummary(t *testing.T, state *State, initialScore float64) {
 		for _, cluster := range island.Clusters {
 			numPrograms := len(cluster.Programs)
 			totalPrograms += numPrograms
-			totalScore += cluster.Score * float64(numPrograms)
-			totalProposeWeightedSum += float64(numPrograms) * (cluster.Score - initialScore)
+			totalScore += float64(cluster.Score) * float64(numPrograms)
+			totalProposeWeightedSum += float64(numPrograms) * (float64(cluster.Score) - initialScore)
 		}
 
 		avgScore := 0.0
@@ -194,15 +191,26 @@ func logStateSummary(t *testing.T, state *State, initialScore float64) {
 			avgScore = totalScore / float64(totalPrograms)
 		}
 
-		bestProgram := island.getBestProgram()
+		bestProgram := island.BestProgram
 		bestSkeleton := "N/A"
 		if bestProgram != nil {
 			bestSkeleton = bestProgram.Skeleton
 		}
 
 		t.Logf("  Island %d: %d clusters, %d programs, Evals: %d, Culls: %d, Avg Score: %.2f, Best Score: %.2f, Best Skeleton: '%s'",
-			island.ID, len(island.Clusters), totalPrograms, island.EvaluationsCount, island.CullingCount, avgScore, island.getBestScore(), bestSkeleton)
+			island.ID, len(island.Clusters), totalPrograms, island.EvaluationsCount, island.CullingCount, avgScore, float64(island.BestProgram.Score), bestSkeleton)
 	}
 	t.Logf("Total Propose-Weighted Sum: %.2f", totalProposeWeightedSum)
 	t.Log("---------------------")
+}
+
+func getBestScore(s *State) Score {
+	bestScore := Score(-1e9)
+	for _, island := range s.Islands {
+		islandBest := island.BestProgram.Score
+		if islandBest > bestScore {
+			bestScore = islandBest
+		}
+	}
+	return bestScore
 }

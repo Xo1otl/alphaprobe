@@ -15,8 +15,43 @@ const (
 	Epsilon = 1e-6
 )
 
-func (s *State) scoreToKey(score Score) string {
-	return strconv.FormatFloat(score, 'f', s.ScoreQuantization, 64)
+type ProposeRequest struct {
+	Parents  []*Program
+	IslandID int
+}
+
+type ObserveResult struct {
+	Query    Skeleton
+	Evidence Score
+	Metadata Metadata
+	Err      error
+}
+
+type Metadata struct {
+	IslandID int
+}
+
+type Skeleton = string
+
+type Score float64
+
+func (s Score) Key(quantization int) string {
+	return strconv.FormatFloat(float64(s), 'f', quantization, 64)
+}
+
+type Program struct {
+	Skeleton Skeleton
+	Score    Score
+}
+
+func (p *Program) isBetterThan(other *Program) bool {
+	if p.Score != other.Score {
+		return p.Score > other.Score
+	}
+	if len(p.Skeleton) != len(other.Skeleton) {
+		return len(p.Skeleton) < len(other.Skeleton)
+	}
+	return p.Skeleton < other.Skeleton
 }
 
 type Cluster struct {
@@ -27,34 +62,34 @@ type Cluster struct {
 type Island struct {
 	ID               int
 	Clusters         map[string]*Cluster
+	PopulationSize   int
 	EvaluationsCount int
 	CullingCount     int
 	BestProgram      *Program
 }
 
-func (i *Island) addProgram(p *Program, scoreToKey func(Score) string) {
+func (i *Island) addProgram(p *Program, quantization int) {
 	i.EvaluationsCount++
 	if p.isBetterThan(i.BestProgram) {
 		i.BestProgram = p
-	}
-	key := scoreToKey(p.Score)
-	if cluster, ok := i.Clusters[key]; ok {
-		cluster.Programs = append(cluster.Programs, p)
-	} else {
-		i.Clusters[key] = &Cluster{Score: p.Score, Programs: []*Program{p}}
+		key := p.Score.Key(quantization)
+		if cluster, ok := i.Clusters[key]; ok {
+			cluster.Programs = append(cluster.Programs, p)
+		} else {
+			i.Clusters[key] = &Cluster{Score: p.Score, Programs: []*Program{p}}
+		}
+		i.PopulationSize++
 	}
 }
 
-func (i *Island) resetWithElite(elite *Program, scoreToKey func(Score) string) {
-	key := scoreToKey(elite.Score)
+func (i *Island) resetWithElite(elite *Program, quantization int) {
+	key := elite.Score.Key(quantization)
 	i.Clusters = map[string]*Cluster{key: {Score: elite.Score, Programs: []*Program{elite}}}
+	i.PopulationSize = 1
 	i.EvaluationsCount = 0
 	i.CullingCount++
 	i.BestProgram = elite
 }
-
-func (island *Island) getBestScore() Score      { return island.BestProgram.Score }
-func (island *Island) getBestProgram() *Program { return island.BestProgram }
 
 type State struct {
 	Islands               map[int]*Island
@@ -62,19 +97,13 @@ type State struct {
 	EvaluationsCount      int
 	MigrationInterval     int
 	NextMigration         int
-	InitialSkeleton       ProgramSkeleton
+	InitialSkeleton       Skeleton
 	NumIslandsToEliminate int
 	ScoreQuantization     int
 	Fatal                 func(err error)
 }
 
-func NewState(initialSkeleton ProgramSkeleton, maxEvaluations, numIslands, migrationInterval, scoreQuantization int, fatal func(err error)) (*State, error) {
-	initialScoreVal, err := strconv.ParseFloat(string(initialSkeleton), 64)
-	if err != nil {
-		return nil, err
-	}
-	initialScore := Score(initialScoreVal)
-
+func NewState(initialSkeleton Skeleton, initialScore Score, maxEvaluations, numIslands, migrationInterval, scoreQuantization int, fatal func(err error)) *State {
 	s := &State{
 		Islands:               make(map[int]*Island, numIslands),
 		MaxEvaluations:        maxEvaluations,
@@ -89,14 +118,15 @@ func NewState(initialSkeleton ProgramSkeleton, maxEvaluations, numIslands, migra
 	for i := range numIslands {
 		program := &Program{Skeleton: initialSkeleton, Score: initialScore}
 		cluster := &Cluster{Score: initialScore, Programs: []*Program{program}}
-		initialKey := s.scoreToKey(initialScore)
+		initialKey := initialScore.Key(s.ScoreQuantization)
 		s.Islands[i] = &Island{
-			ID:          i,
-			Clusters:    map[string]*Cluster{initialKey: cluster},
-			BestProgram: program,
+			ID:             i,
+			Clusters:       map[string]*Cluster{initialKey: cluster},
+			PopulationSize: 1,
+			BestProgram:    program,
 		}
 	}
-	return s, nil
+	return s
 }
 
 func (s *State) Update(res ObserveResult) (done bool) {
@@ -111,7 +141,7 @@ func (s *State) Update(res ObserveResult) (done bool) {
 	}
 
 	program := &Program{Skeleton: res.Query, Score: res.Evidence}
-	island.addProgram(program, s.scoreToKey)
+	island.addProgram(program, s.ScoreQuantization)
 
 	if s.EvaluationsCount >= s.NextMigration {
 		s.manageIslands()
@@ -158,15 +188,18 @@ func (s *State) selectCluster(island *Island) *Cluster {
 	}
 
 	clusters := make([]*Cluster, 0, len(island.Clusters))
+	maxClusterScore := Score(math.Inf(-1))
 	for _, cluster := range island.Clusters {
 		clusters = append(clusters, cluster)
+		if cluster.Score > maxClusterScore {
+			maxClusterScore = cluster.Score
+		}
 	}
 
-	tc := T0*(1-float64(island.EvaluationsCount%N)/float64(N)) + Epsilon
-	maxScore := island.getBestScore()
+	tc := T0*(1-float64(island.PopulationSize%N)/float64(N)) + Epsilon
 
 	clusterWeightFunc := func(c *Cluster) float64 {
-		return math.Exp((c.Score - maxScore) / tc)
+		return math.Exp(float64(c.Score-maxClusterScore) / tc)
 	}
 	selectedCluster, err := weightedChoice(clusters, clusterWeightFunc)
 	if err != nil {
@@ -213,44 +246,29 @@ func (s *State) manageIslands() {
 		return
 	}
 
-	sortedIslands := make([]*Island, 0, len(s.Islands))
+	allIslands := make([]*Island, 0, len(s.Islands))
 	for _, island := range s.Islands {
-		sortedIslands = append(sortedIslands, island)
+		allIslands = append(allIslands, island)
 	}
-	sort.Slice(sortedIslands, func(i, j int) bool {
-		return sortedIslands[i].getBestScore() > sortedIslands[j].getBestScore()
+
+	sort.Slice(allIslands, func(i, j int) bool {
+		return allIslands[i].BestProgram.Score > allIslands[j].BestProgram.Score
 	})
 
-	numSurvivors := len(sortedIslands) - s.NumIslandsToEliminate
-	elites := make([]*Program, 0, numSurvivors)
-	for _, island := range sortedIslands[:numSurvivors] {
-		bestProgram := island.getBestProgram()
-		if bestProgram == nil {
-			s.Fatal(fmt.Errorf("%w: island %d", ErrEmptySurvivorIsland, island.ID))
-		}
-		elites = append(elites, bestProgram)
-	}
+	numSurvivors := len(allIslands) - s.NumIslandsToEliminate
+	survivors := allIslands[:numSurvivors]
+	culled := allIslands[numSurvivors:]
 
-	if len(elites) == 0 {
+	if len(survivors) == 0 || survivors[len(survivors)-1].BestProgram == nil {
 		s.Fatal(fmt.Errorf("%w", ErrNoElitesFound))
+		return
 	}
 
-	for _, islandToReplace := range sortedIslands[numSurvivors:] {
-		elite := elites[rand.Intn(len(elites))]
-		islandToReplace.resetWithElite(elite, s.scoreToKey)
+	for _, islandToReplace := range culled {
+		randomSurvivor := survivors[rand.Intn(len(survivors))]
+		elite := randomSurvivor.BestProgram
+		islandToReplace.resetWithElite(elite, s.ScoreQuantization)
 	}
-}
-
-// getBestScore finds the highest score among the best programs of all islands.
-func (s *State) getBestScore() Score {
-	bestScore := Score(-1e9) // Start with a very low score
-	for _, island := range s.Islands {
-		islandBest := island.getBestScore()
-		if islandBest > bestScore {
-			bestScore = islandBest
-		}
-	}
-	return bestScore
 }
 
 func weightedChoice[T any](items []T, getWeight func(T) float64) (T, error) {

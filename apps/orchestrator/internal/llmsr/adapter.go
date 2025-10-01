@@ -32,3 +32,15 @@ func (a *Adapter) Next() (ObserveRequest, bool) {
 	a.queue = a.queue[1:]
 	return req, true
 }
+
+type ProposeResult struct {
+	Skeletons []Skeleton
+	Metadata  Metadata
+	Err       error
+}
+
+type ObserveRequest struct {
+	Query    Skeleton
+	Metadata Metadata
+	Err      error
+}
