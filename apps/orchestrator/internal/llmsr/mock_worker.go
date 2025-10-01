@@ -6,12 +6,12 @@ import (
 	"strconv"
 )
 
-func NewScoreFromString(s string) (Score, error) {
+func NewScoreFromString(s string) (ProgramScore, error) {
 	f, err := strconv.ParseFloat(s, 64)
 	if err != nil {
 		return 0, err
 	}
-	return Score(f), nil
+	return f, nil
 }
 
 // MockPropose generates a predictable set of new skeletons for deterministic testing.

@@ -22,7 +22,7 @@ type ProposeRequest struct {
 
 type ObserveResult struct {
 	Query    Skeleton
-	Evidence Score
+	Evidence ProgramScore
 	Metadata Metadata
 	Err      error
 }
@@ -33,15 +33,21 @@ type Metadata struct {
 
 type Skeleton = string
 
-type Score float64
+type ProgramScore = float64
+type ClusterScore = float64
 
-func (s Score) Key(quantization int) string {
-	return strconv.FormatFloat(float64(s), 'f', quantization, 64)
+func quantize(score ProgramScore, precision int) ClusterScore {
+	key := strconv.FormatFloat(score, 'f', precision, 64)
+	f, err := strconv.ParseFloat(key, 64)
+	if err != nil {
+		panic(fmt.Sprintf("failed to parse quantized score string '%s': %v", key, err))
+	}
+	return f
 }
 
 type Program struct {
 	Skeleton Skeleton
-	Score    Score
+	Score    ProgramScore
 }
 
 func (p *Program) isBetterThan(other *Program) bool {
@@ -51,17 +57,17 @@ func (p *Program) isBetterThan(other *Program) bool {
 	if len(p.Skeleton) != len(other.Skeleton) {
 		return len(p.Skeleton) < len(other.Skeleton)
 	}
-	return p.Skeleton < other.Skeleton
+	return false
 }
 
 type Cluster struct {
-	Score    Score
+	Score    ClusterScore
 	Programs []*Program
 }
 
 type Island struct {
 	ID               int
-	Clusters         map[string]*Cluster
+	Clusters         map[ClusterScore]*Cluster
 	PopulationSize   int
 	EvaluationsCount int
 	CullingCount     int
@@ -72,19 +78,20 @@ func (i *Island) addProgram(p *Program, quantization int) {
 	i.EvaluationsCount++
 	if p.isBetterThan(i.BestProgram) {
 		i.BestProgram = p
-		key := p.Score.Key(quantization)
-		if cluster, ok := i.Clusters[key]; ok {
+		clusterScore := quantize(p.Score, quantization)
+
+		if cluster, ok := i.Clusters[clusterScore]; ok {
 			cluster.Programs = append(cluster.Programs, p)
 		} else {
-			i.Clusters[key] = &Cluster{Score: p.Score, Programs: []*Program{p}}
+			i.Clusters[clusterScore] = &Cluster{Score: clusterScore, Programs: []*Program{p}}
 		}
 		i.PopulationSize++
 	}
 }
 
 func (i *Island) resetWithElite(elite *Program, quantization int) {
-	key := elite.Score.Key(quantization)
-	i.Clusters = map[string]*Cluster{key: {Score: elite.Score, Programs: []*Program{elite}}}
+	clusterScore := quantize(elite.Score, quantization)
+	i.Clusters = map[ClusterScore]*Cluster{clusterScore: {Score: clusterScore, Programs: []*Program{elite}}}
 	i.PopulationSize = 1
 	i.EvaluationsCount = 0
 	i.CullingCount++
@@ -103,7 +110,7 @@ type State struct {
 	Fatal                 func(err error)
 }
 
-func NewState(initialSkeleton Skeleton, initialScore Score, maxEvaluations, numIslands, migrationInterval, scoreQuantization int, fatal func(err error)) *State {
+func NewState(initialSkeleton Skeleton, initialScore ProgramScore, maxEvaluations, numIslands, migrationInterval, scoreQuantization int, fatal func(err error)) *State {
 	s := &State{
 		Islands:               make(map[int]*Island, numIslands),
 		MaxEvaluations:        maxEvaluations,
@@ -115,13 +122,14 @@ func NewState(initialSkeleton Skeleton, initialScore Score, maxEvaluations, numI
 		Fatal:                 fatal,
 	}
 
+	initialClusterScore := quantize(initialScore, s.ScoreQuantization)
+
 	for i := range numIslands {
 		program := &Program{Skeleton: initialSkeleton, Score: initialScore}
-		cluster := &Cluster{Score: initialScore, Programs: []*Program{program}}
-		initialKey := initialScore.Key(s.ScoreQuantization)
+		cluster := &Cluster{Score: initialClusterScore, Programs: []*Program{program}}
 		s.Islands[i] = &Island{
 			ID:             i,
-			Clusters:       map[string]*Cluster{initialKey: cluster},
+			Clusters:       map[ClusterScore]*Cluster{initialClusterScore: cluster},
 			PopulationSize: 1,
 			BestProgram:    program,
 		}
@@ -188,7 +196,7 @@ func (s *State) selectCluster(island *Island) *Cluster {
 	}
 
 	clusters := make([]*Cluster, 0, len(island.Clusters))
-	maxClusterScore := Score(math.Inf(-1))
+	maxClusterScore := ClusterScore(math.Inf(-1))
 	for _, cluster := range island.Clusters {
 		clusters = append(clusters, cluster)
 		if cluster.Score > maxClusterScore {
@@ -199,7 +207,7 @@ func (s *State) selectCluster(island *Island) *Cluster {
 	tc := T0*(1-float64(island.PopulationSize%N)/float64(N)) + Epsilon
 
 	clusterWeightFunc := func(c *Cluster) float64 {
-		return math.Exp(float64(c.Score-maxClusterScore) / tc)
+		return math.Exp((c.Score - maxClusterScore) / tc)
 	}
 	selectedCluster, err := weightedChoice(clusters, clusterWeightFunc)
 	if err != nil {

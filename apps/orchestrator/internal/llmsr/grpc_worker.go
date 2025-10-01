@@ -12,7 +12,7 @@ func NewGRPCPropose(client pb.LLMSRClient) func(context.Context, ProposeRequest)
 	return func(ctx context.Context, req ProposeRequest) ProposeResult {
 		pbParents := make([]*pb.Program, len(req.Parents))
 		for i, p := range req.Parents {
-			pbParents[i] = &pb.Program{Skeleton: string(p.Skeleton), Score: float64(p.Score)}
+			pbParents[i] = &pb.Program{Skeleton: string(p.Skeleton), Score: p.Score}
 		}
 
 		pbReq := &pb.ProposeRequest{Parents: pbParents}
@@ -55,7 +55,7 @@ func NewGRPCObserve(client pb.LLMSRClient) func(context.Context, ObserveRequest)
 
 		return ObserveResult{
 			Query:    Skeleton(resp.Skeleton),
-			Evidence: Score(resp.Score),
+			Evidence: resp.Score,
 			Metadata: req.Metadata,
 		}
 	}

@@ -54,4 +54,4 @@ The coefficients for a proposed skeleton are determined by a numerical optimizer
 
 ### 4. Propagate
 
-A newly evaluated skeleton is added to its source island **only if its score improves upon the island's current best score**. If this condition is met, the skeleton is added to the cluster corresponding to its score. If no cluster exists for that score, a new one is created.
+A newly evaluated skeleton is added to its source island only if its score is higher than the island's current best, or if the scores are tied and its skeleton is shorter. If this condition is met, the skeleton is added to the cluster corresponding to its score. If no cluster exists for that score, a new one is created.

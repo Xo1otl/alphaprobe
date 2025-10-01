@@ -55,12 +55,12 @@ func TestLLMSR_WithMock(t *testing.T) {
 		t.Fatal("Test timed out, indicating a potential deadlock.")
 	}
 
-	logStateSummary(t, state, float64(initialScore))
+	logStateSummary(t, state, initialScore)
 
 	assert.True(t, state.EvaluationsCount >= maxEvaluations, "Should have completed at least the specified number of evaluations")
-	assert.Greater(t, float64(getBestScore(state)), float64(initialScore), "The final best score should be better (greater) than the initial score")
+	assert.Greater(t, getBestScore(state), initialScore, "The final best score should be better (greater) than the initial score")
 
-	t.Logf("Test finished. Initial score: %f, Best score found: %f", float64(initialScore), float64(getBestScore(state)))
+	t.Logf("Test finished. Initial score: %f, Best score found: %f", initialScore, getBestScore(state))
 }
 
 func TestLLMSR_WithGRPCServer(t *testing.T) {
@@ -153,12 +153,12 @@ func TestLLMSR_WithGRPCServer(t *testing.T) {
 		t.Fatal("Test timed out, indicating a potential deadlock or server issue.")
 	}
 
-	logStateSummary(t, state, float64(initialScore))
+	logStateSummary(t, state, initialScore)
 
 	assert.True(t, state.EvaluationsCount >= maxEvaluations, "Should have completed at least the specified number of evaluations")
-	assert.Greater(t, float64(getBestScore(state)), float64(initialScore), "The final best score should be better (greater) than the initial score")
+	assert.Greater(t, getBestScore(state), initialScore, "The final best score should be better (greater) than the initial score")
 
-	t.Logf("Test finished. Initial score: %f, Best score found: %f", float64(initialScore), float64(getBestScore(state)))
+	t.Logf("Test finished. Initial score: %f, Best score found: %f", initialScore, getBestScore(state))
 }
 
 func logStateSummary(t *testing.T, state *State, initialScore float64) {
@@ -182,8 +182,8 @@ func logStateSummary(t *testing.T, state *State, initialScore float64) {
 		for _, cluster := range island.Clusters {
 			numPrograms := len(cluster.Programs)
 			totalPrograms += numPrograms
-			totalScore += float64(cluster.Score) * float64(numPrograms)
-			totalProposeWeightedSum += float64(numPrograms) * (float64(cluster.Score) - initialScore)
+			totalScore += cluster.Score * float64(numPrograms)
+			totalProposeWeightedSum += float64(numPrograms) * (cluster.Score - initialScore)
 		}
 
 		avgScore := 0.0
@@ -198,14 +198,14 @@ func logStateSummary(t *testing.T, state *State, initialScore float64) {
 		}
 
 		t.Logf("  Island %d: %d clusters, %d programs, Evals: %d, Culls: %d, Avg Score: %.2f, Best Score: %.2f, Best Skeleton: '%s'",
-			island.ID, len(island.Clusters), totalPrograms, island.EvaluationsCount, island.CullingCount, avgScore, float64(island.BestProgram.Score), bestSkeleton)
+			island.ID, len(island.Clusters), totalPrograms, island.EvaluationsCount, island.CullingCount, avgScore, island.BestProgram.Score, bestSkeleton)
 	}
 	t.Logf("Total Propose-Weighted Sum: %.2f", totalProposeWeightedSum)
 	t.Log("---------------------")
 }
 
-func getBestScore(s *State) Score {
-	bestScore := Score(-1e9)
+func getBestScore(s *State) ProgramScore {
+	bestScore := ProgramScore(-1e9)
 	for _, island := range s.Islands {
 		islandBest := island.BestProgram.Score
 		if islandBest > bestScore {
