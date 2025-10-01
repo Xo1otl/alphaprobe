@@ -1,3 +1,7 @@
+# paper: LLM-SR
+`https://www.alphaxiv.org/abs/2404.18400v3`
+# `state.go`
+```go
 package llmsr
 
 import (
@@ -8,11 +12,94 @@ import (
 	"strconv"
 )
 
-type Logger interface {
-	Info(v ...any)
-	Debug(v ...any)
-	// Fatal logs an error and is expected to trigger a program shutdown.
-	Fatal(v ...any)
+const (
+	T0      = 1.0
+	N       = 100
+	Tp      = 1.0
+	Epsilon = 1e-6
+)
+
+type ProposeRequest struct {
+	Parents  []*Program
+	IslandID int
+}
+
+type ObserveResult struct {
+	Query    Skeleton
+	Evidence ProgramScore
+	Metadata Metadata
+	Err      error
+}
+
+type Metadata struct {
+	IslandID int
+}
+
+type Skeleton = string
+
+type ProgramScore = float64
+type ClusterScore = float64
+
+func quantize(score ProgramScore, precision int) ClusterScore {
+	key := strconv.FormatFloat(score, 'f', precision, 64)
+	f, err := strconv.ParseFloat(key, 64)
+	if err != nil {
+		panic(fmt.Sprintf("failed to parse quantized score string '%s': %v", key, err))
+	}
+	return f
+}
+
+type Program struct {
+	Skeleton Skeleton
+	Score    ProgramScore
+}
+
+func (p *Program) isBetterThan(other *Program) bool {
+	if p.Score != other.Score {
+		return p.Score > other.Score
+	}
+	if len(p.Skeleton) != len(other.Skeleton) {
+		return len(p.Skeleton) < len(other.Skeleton)
+	}
+	return false
+}
+
+type Cluster struct {
+	Score    ClusterScore
+	Programs []*Program
+}
+
+type Island struct {
+	ID               int
+	Clusters         map[ClusterScore]*Cluster
+	PopulationSize   int
+	EvaluationsCount int
+	CullingCount     int
+	BestProgram      *Program
+}
+
+func (i *Island) addProgram(p *Program, quantization int) {
+	i.EvaluationsCount++
+	if p.isBetterThan(i.BestProgram) {
+		i.BestProgram = p
+		clusterScore := quantize(p.Score, quantization)
+
+		if cluster, ok := i.Clusters[clusterScore]; ok {
+			cluster.Programs = append(cluster.Programs, p)
+		} else {
+			i.Clusters[clusterScore] = &Cluster{Score: clusterScore, Programs: []*Program{p}}
+		}
+		i.PopulationSize++
+	}
+}
+
+func (i *Island) resetWithElite(elite *Program, quantization int) {
+	clusterScore := quantize(elite.Score, quantization)
+	i.Clusters = map[ClusterScore]*Cluster{clusterScore: {Score: clusterScore, Programs: []*Program{elite}}}
+	i.PopulationSize = 1
+	i.EvaluationsCount = 0
+	i.CullingCount++
+	i.BestProgram = elite
 }
 
 type State struct {
@@ -24,10 +111,10 @@ type State struct {
 	InitialSkeleton       Skeleton
 	NumIslandsToEliminate int
 	ScoreQuantization     int
-	Log                   Logger
+	Fatal                 func(err error)
 }
 
-func NewState(initialSkeleton Skeleton, initialScore ProgramScore, maxEvaluations, numIslands, migrationInterval, scoreQuantization int, eliminationRate float64, log Logger) (*State, error) {
+func NewState(initialSkeleton Skeleton, initialScore ProgramScore, maxEvaluations, numIslands, migrationInterval, scoreQuantization int, eliminationRate float64, fatal func(err error)) (*State, error) {
 	if eliminationRate < 0 || eliminationRate >= 1 {
 		return nil, fmt.Errorf("%w", ErrInvalidEliminationRate)
 	}
@@ -39,13 +126,10 @@ func NewState(initialSkeleton Skeleton, initialScore ProgramScore, maxEvaluation
 		InitialSkeleton:       initialSkeleton,
 		NumIslandsToEliminate: int(float64(numIslands) * eliminationRate),
 		ScoreQuantization:     scoreQuantization,
-		Log:                   log,
+		Fatal:                 fatal,
 	}
 
-	initialClusterScore, err := quantize(initialScore, s.ScoreQuantization)
-	if err != nil {
-		return nil, err
-	}
+	initialClusterScore := quantize(initialScore, s.ScoreQuantization)
 
 	for i := range numIslands {
 		program := &Program{Skeleton: initialSkeleton, Score: initialScore}
@@ -62,28 +146,20 @@ func NewState(initialSkeleton Skeleton, initialScore ProgramScore, maxEvaluation
 
 func (s *State) Update(res ObserveResult) (done bool) {
 	if res.Err != nil {
-		s.Log.Fatal(fmt.Errorf("error in observation: %v", res.Err))
-		return true
+		s.Fatal(fmt.Errorf("error in observation: %v", res.Err))
 	}
 	s.EvaluationsCount++
 
 	island, ok := s.Islands[res.Metadata.IslandID]
 	if !ok {
-		s.Log.Fatal(fmt.Errorf("%w: island with ID %d", ErrIslandNotFound, res.Metadata.IslandID))
-		return true
+		s.Fatal(fmt.Errorf("%w: island with ID %d", ErrIslandNotFound, res.Metadata.IslandID))
 	}
 
 	program := &Program{Skeleton: res.Query, Score: res.Evidence}
-	if err := island.addProgram(program, s.ScoreQuantization); err != nil {
-		s.Log.Fatal(fmt.Errorf("failed to add program: %w", err))
-		return true
-	}
+	island.addProgram(program, s.ScoreQuantization)
 
 	if s.EvaluationsCount >= s.NextMigration {
-		if err := s.manageIslands(); err != nil {
-			s.Log.Fatal(fmt.Errorf("failed to manage islands: %w", err))
-			return true
-		}
+		s.manageIslands()
 		s.NextMigration += s.MigrationInterval
 	}
 	return s.EvaluationsCount >= s.MaxEvaluations
@@ -100,43 +176,30 @@ func (s *State) NewRequest() (ProposeRequest, bool) {
 	randomID := islandIDs[rand.Intn(len(islandIDs))]
 	island := s.Islands[randomID]
 
+	// FATAL CHECK: Logic flaw if an empty island is chosen while others are not.
 	if len(island.Clusters) == 0 {
 		for _, otherIsland := range s.Islands {
 			if len(otherIsland.Clusters) > 0 {
-				s.Log.Fatal(fmt.Errorf("%w: island %d", ErrEmptyIslandSelected, island.ID))
-				return ProposeRequest{}, false
+				s.Fatal(fmt.Errorf("%w: island %d", ErrEmptyIslandSelected, island.ID))
+				break
 			}
 		}
 	}
 
-	parent1, err := s.selectParent(island)
-	if err != nil {
-		s.Log.Fatal(fmt.Errorf("failed to select parent: %w", err))
-		return ProposeRequest{}, false
-	}
-	parent2, err := s.selectParent(island)
-	if err != nil {
-		s.Log.Fatal(fmt.Errorf("failed to select parent: %w", err))
-		return ProposeRequest{}, false
-	}
-
 	return ProposeRequest{
-		Parents:  []*Program{parent1, parent2},
+		Parents:  []*Program{s.selectParent(island), s.selectParent(island)},
 		IslandID: island.ID,
 	}, true
 }
 
-func (s *State) selectParent(island *Island) (*Program, error) {
-	selectedCluster, err := s.selectCluster(island)
-	if err != nil {
-		return nil, err
-	}
+func (s *State) selectParent(island *Island) *Program {
+	selectedCluster := s.selectCluster(island)
 	return s.selectProgramFromCluster(selectedCluster, island.ID)
 }
 
-func (s *State) selectCluster(island *Island) (*Cluster, error) {
+func (s *State) selectCluster(island *Island) *Cluster {
 	if len(island.Clusters) == 0 {
-		return nil, fmt.Errorf("%w: island %d", ErrSelectionFromEmptyIsland, island.ID)
+		s.Fatal(fmt.Errorf("%w: island %d", ErrSelectionFromEmptyIsland, island.ID))
 	}
 
 	clusters := make([]*Cluster, 0, len(island.Clusters))
@@ -155,18 +218,18 @@ func (s *State) selectCluster(island *Island) (*Cluster, error) {
 	}
 	selectedCluster, err := weightedChoice(clusters, clusterWeightFunc)
 	if err != nil {
-		return nil, fmt.Errorf("cluster selection failed in island %d: %w", island.ID, err)
+		s.Fatal(fmt.Errorf("cluster selection failed in island %d: %w", island.ID, err))
 	}
-	return selectedCluster, nil
+	return selectedCluster
 }
 
-func (s *State) selectProgramFromCluster(cluster *Cluster, islandID int) (*Program, error) {
+func (s *State) selectProgramFromCluster(cluster *Cluster, islandID int) *Program {
 	programs := cluster.Programs
 	if len(programs) == 0 {
-		return nil, fmt.Errorf("%w in island %d", ErrInvalidCluster, islandID)
+		s.Fatal(fmt.Errorf("%w in island %d", ErrInvalidCluster, islandID))
 	}
 	if len(programs) == 1 {
-		return programs[0], nil
+		return programs[0]
 	}
 
 	minLength, maxLength := math.MaxInt32, 0
@@ -187,15 +250,15 @@ func (s *State) selectProgramFromCluster(cluster *Cluster, islandID int) (*Progr
 	}
 	selectedProgram, err := weightedChoice(programs, skeletonWeightFunc)
 	if err != nil {
-		return nil, fmt.Errorf("program selection failed from cluster with score %f in island %d: %w", cluster.Score, islandID, err)
+		s.Fatal(fmt.Errorf("program selection failed from cluster with score %f in island %d: %w", cluster.Score, islandID, err))
 	}
 
-	return selectedProgram, nil
+	return selectedProgram
 }
 
-func (s *State) manageIslands() error {
+func (s *State) manageIslands() {
 	if len(s.Islands) <= s.NumIslandsToEliminate {
-		return nil
+		return
 	}
 
 	allIslands := make([]*Island, 0, len(s.Islands))
@@ -212,17 +275,15 @@ func (s *State) manageIslands() error {
 	culled := allIslands[numSurvivors:]
 
 	if len(survivors) == 0 || survivors[len(survivors)-1].BestProgram == nil {
-		return fmt.Errorf("%w", ErrNoElitesFound)
+		s.Fatal(fmt.Errorf("%w", ErrNoElitesFound))
+		return
 	}
 
 	for _, islandToReplace := range culled {
 		randomSurvivor := survivors[rand.Intn(len(survivors))]
 		elite := randomSurvivor.BestProgram
-		if err := islandToReplace.resetWithElite(elite, s.ScoreQuantization); err != nil {
-			return err
-		}
+		islandToReplace.resetWithElite(elite, s.ScoreQuantization)
 	}
-	return nil
 }
 
 func weightedChoice[T any](items []T, getWeight func(T) float64) (T, error) {
@@ -256,101 +317,10 @@ func weightedChoice[T any](items []T, getWeight func(T) float64) (T, error) {
 	}
 	return items[len(items)-1], nil
 }
-
-type Island struct {
-	ID               int
-	Clusters         map[ClusterScore]*Cluster
-	PopulationSize   int
-	EvaluationsCount int
-	CullingCount     int
-	BestProgram      *Program
-}
-
-func (i *Island) addProgram(p *Program, quantization int) error {
-	i.EvaluationsCount++
-	if p.isBetterThan(i.BestProgram) {
-		i.BestProgram = p
-		clusterScore, err := quantize(p.Score, quantization)
-		if err != nil {
-			return err
-		}
-
-		if cluster, ok := i.Clusters[clusterScore]; ok {
-			cluster.Programs = append(cluster.Programs, p)
-		} else {
-			i.Clusters[clusterScore] = &Cluster{Score: clusterScore, Programs: []*Program{p}}
-		}
-		i.PopulationSize++
-	}
-	return nil
-}
-
-func (i *Island) resetWithElite(elite *Program, quantization int) error {
-	clusterScore, err := quantize(elite.Score, quantization)
-	if err != nil {
-		return err
-	}
-	i.Clusters = map[ClusterScore]*Cluster{clusterScore: {Score: clusterScore, Programs: []*Program{elite}}}
-	i.PopulationSize = 1
-	i.EvaluationsCount = 0
-	i.CullingCount++
-	i.BestProgram = elite
-	return nil
-}
-
-type Cluster struct {
-	Score    ClusterScore
-	Programs []*Program
-}
-
-type ProposeRequest struct {
-	Parents  []*Program
-	IslandID int
-}
-
-type ObserveResult struct {
-	Query    Skeleton
-	Evidence ProgramScore
-	Metadata Metadata
-	Err      error
-}
-
-type Metadata struct {
-	IslandID int
-}
-
-func quantize(score ProgramScore, precision int) (ClusterScore, error) {
-	key := strconv.FormatFloat(score, 'f', precision, 64)
-	f, err := strconv.ParseFloat(key, 64)
-	if err != nil {
-		return 0, fmt.Errorf("failed to parse quantized score string '%s': %w", key, err)
-	}
-	return f, nil
-}
-
-type Program struct {
-	Skeleton Skeleton
-	Score    ProgramScore
-}
-
-func (p *Program) isBetterThan(other *Program) bool {
-	if p.Score != other.Score {
-		return p.Score > other.Score
-	}
-	if len(p.Skeleton) != len(other.Skeleton) {
-		return len(p.Skeleton) < len(other.Skeleton)
-	}
-	return false
-}
-
-type Skeleton = string
-
-type ProgramScore = float64
-type ClusterScore = float64
-
-const (
-	T0      = 1.0
-	N       = 100
-	Tp      = 1.0
-	Epsilon = 1e-6
-)
+```
+# **NOTE**
+* The `Update`/`Next` functions will be called unpredictably within a single goroutine, so no locks are needed.
+* The code uses the latest Go syntax and compiles successfully.
+* The score quantization for clustering is not a discrepancy, as its configurable granularity can make it functionally identical to using raw float64 scores.
+# Your Task
+Assuming the **NOTE** is correct, does this state machine implementation completely reproduce the paper, with the exception of **the addition of numerical stability** and **changes to the time-based migration**?

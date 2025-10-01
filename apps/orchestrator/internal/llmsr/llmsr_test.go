@@ -19,6 +19,7 @@ import (
 const (
 	maxEvaluations     = 3000
 	numIslands         = 4
+	eliminationRate    = 0.5
 	migrationInterval  = 25
 	proposeConcurrency = 2
 	observeConcurrency = 4
@@ -27,40 +28,7 @@ const (
 )
 
 func TestLLMSR_WithMock(t *testing.T) {
-
-	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
-	defer cancel()
-
-	initialSkeleton := "-100"
-	initialScore := MockObserve(ctx, ObserveRequest{Query: Skeleton(initialSkeleton)}).Evidence
-	fatal := func(err error) {
-		cancel()
-		t.Logf("Fatal error in State: %v", err)
-		t.Fail()
-	}
-	state := NewState(initialSkeleton, initialScore, maxEvaluations, numIslands, migrationInterval, scoreQuantization, fatal)
-
-	adapter := NewAdapter()
-
-	orchestrator := bilevel.NewOrchestrator(
-		MockPropose,
-		MockObserve,
-		proposeConcurrency,
-		observeConcurrency,
-	)
-
-	bilevel.RunWithAdapter(orchestrator, ctx, state, adapter)
-
-	if ctx.Err() == context.DeadlineExceeded {
-		t.Fatal("Test timed out, indicating a potential deadlock.")
-	}
-
-	logStateSummary(t, state, initialScore)
-
-	assert.True(t, state.EvaluationsCount >= maxEvaluations, "Should have completed at least the specified number of evaluations")
-	assert.Greater(t, getBestScore(state), initialScore, "The final best score should be better (greater) than the initial score")
-
-	t.Logf("Test finished. Initial score: %f, Best score found: %f", initialScore, getBestScore(state))
+	runLLMSRTest(t, MockPropose, MockObserve)
 }
 
 func TestLLMSR_WithGRPCServer(t *testing.T) {
@@ -71,17 +39,14 @@ func TestLLMSR_WithGRPCServer(t *testing.T) {
 		"/workspaces/alphaprobe/.venv/bin/python", "-u",
 		"-c", "import llmsr_worker; llmsr_worker.main()",
 	)
-
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		t.Fatalf("Failed to get stdout pipe: %v", err)
 	}
 	cmd.Stderr = cmd.Stdout
-
 	if err := cmd.Start(); err != nil {
 		t.Fatalf("Failed to start gRPC server: %v", err)
 	}
-
 	defer func() {
 		if err := cmd.Process.Kill(); err != nil {
 			t.Logf("Failed to kill process: %v", err)
@@ -91,29 +56,24 @@ func TestLLMSR_WithGRPCServer(t *testing.T) {
 
 	serverReady := make(chan bool)
 	expectedOutput := "gRPC server started"
-
 	go func() {
 		scanner := bufio.NewScanner(stdout)
-		serverReadyClosed := false
 		for scanner.Scan() {
 			line := scanner.Text()
 			t.Logf("[gRPC Server]: %s", line)
-			if !serverReadyClosed && strings.Contains(line, expectedOutput) {
+			if strings.Contains(line, expectedOutput) {
 				t.Log("gRPC server is ready.")
 				close(serverReady)
-				serverReadyClosed = true
+				return
 			}
 		}
 	}()
-
 	select {
 	case <-serverReady:
-		// Server is ready, continue with the test
 	case <-ctx.Done():
 		t.Fatal("Timeout waiting for gRPC server to start.")
 	}
 
-	// Connect gRPC client
 	conn, err := grpc.NewClient("localhost:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Failed to connect to gRPC server: %v", err)
@@ -124,15 +84,19 @@ func TestLLMSR_WithGRPCServer(t *testing.T) {
 	proposeFn := NewGRPCPropose(client)
 	observeFn := NewGRPCObserve(client)
 
-	// Setup orchestrator
+	runLLMSRTest(t, proposeFn, observeFn)
+}
+
+func runLLMSRTest(t *testing.T, proposeFn bilevel.ProposeFunc[ProposeRequest, ProposeResult], observeFn bilevel.ObserveFunc[ObserveRequest, ObserveResult]) {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+
 	initialSkeleton := "-100"
 	initialScore := observeFn(ctx, ObserveRequest{Query: Skeleton(initialSkeleton)}).Evidence
-	fatal := func(err error) {
-		cancel()
-		t.Logf("Fatal error in State: %v", err)
-		t.Fail()
-	}
-	state := NewState(initialSkeleton, initialScore, maxEvaluations, numIslands, migrationInterval, scoreQuantization, fatal)
+	log := &TestLogger{}
+	state, err := NewState(initialSkeleton, initialScore, maxEvaluations, numIslands, migrationInterval, scoreQuantization, eliminationRate, log)
 	if err != nil {
 		t.Fatalf("Failed to create initial state: %v", err)
 	}
@@ -146,7 +110,6 @@ func TestLLMSR_WithGRPCServer(t *testing.T) {
 		observeConcurrency,
 	)
 
-	// Run orchestrator
 	bilevel.RunWithAdapter(orchestrator, ctx, state, adapter)
 
 	if ctx.Err() == context.DeadlineExceeded {
@@ -165,6 +128,7 @@ func logStateSummary(t *testing.T, state *State, initialScore float64) {
 	t.Helper()
 	t.Log("--- State Summary ---")
 	t.Logf("Total Islands: %d", len(state.Islands))
+
 	// Sort islands by ID for consistent logging
 	sortedIslands := make([]*Island, 0, len(state.Islands))
 	for _, island := range state.Islands {
@@ -213,4 +177,20 @@ func getBestScore(s *State) ProgramScore {
 		}
 	}
 	return bestScore
+}
+
+type TestLogger struct {
+	cancel context.CancelFunc
+}
+
+func NewTestLogger(cancel context.CancelFunc) *TestLogger {
+	return &TestLogger{cancel}
+}
+
+func (l *TestLogger) Info(v ...any) {
+}
+func (l *TestLogger) Debug(v ...any) {
+}
+func (l *TestLogger) Fatal(v ...any) {
+	l.cancel()
 }
