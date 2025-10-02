@@ -1,4 +1,5 @@
 from concurrent import futures
+from typing import Any
 import grpc
 from grpc_reflection.v1alpha import reflection
 from . import pb
@@ -7,16 +8,36 @@ from . import propose
 
 
 class LLMSRServicer(pb.LLMSRServicer):
-    def Propose(self, request, context):
-        return propose.handle(request, context)
+    def Propose(self, request: pb.ProposeRequest, context: Any) -> pb.ProposeResponse:
+        try:
+            req = propose.Request(
+                parents=[
+                    propose.Program(skeleton=p.skeleton, score=p.score)
+                    for p in request.parents
+                ]
+            )
+            res = propose.handle(req)
+            return pb.ProposeResponse(skeletons=res.skeletons)
 
-    def Observe(self, request, context):
-        return observe.handle(request, context)
+        except ValueError as e:
+            context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+            context.set_details(str(e))
+            return pb.ProposeResponse()
+
+    def Observe(self, request: pb.ObserveRequest, context: Any) -> pb.ObserveResponse:
+        try:
+            req = observe.Request(skeleton=request.skeleton)
+            res = observe.handle(req)
+            return pb.ObserveResponse(skeleton=res.skeleton, score=res.score)
+        except ValueError as e:
+            context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+            context.set_details(str(e))
+            return pb.ObserveResponse()
 
 
 def main():
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=None))
-    pb.add_LLMSRServicer_to_server(LLMSRServicer(), server)
+    pb.add_LLMSRServicer_to_server(LLMSRServicer(), server)  # type: ignore
 
     service_names = (
         pb.DESCRIPTOR.services_by_name["LLMSR"].full_name,

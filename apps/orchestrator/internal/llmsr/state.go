@@ -9,6 +9,10 @@ import (
 	"time"
 )
 
+// DeterministicState holds the complete state of the island model evolutionary algorithm.
+//
+// The design assumes a single-threaded execution model where all method calls are serialized by a controlling goroutine.
+// All code paths must be strictly deterministic.
 type DeterministicState struct {
 	Islands               map[int]*Island
 	MaxEvaluations        int
@@ -26,7 +30,7 @@ type DeterministicState struct {
 
 func NewDeterministicState(initialSkeleton Skeleton, initialScore ProgramScore, maxEvaluations, numIslands, migrationInterval, scoreQuantization int, eliminationRate float64, t0 float64, n int, tp float64, rng *rand.Rand) (*DeterministicState, error) {
 	if eliminationRate < 0 || eliminationRate >= 1 {
-		return nil, ErrInvalidEliminationRate
+		return nil, fmt.Errorf("%w: elimination rate must be in [0, 1), got %f", ErrInvalidParameter, eliminationRate)
 	}
 	if n <= 0 {
 		return nil, fmt.Errorf("%w: N must be positive, got %d", ErrInvalidParameter, n)
@@ -80,8 +84,8 @@ func (s *DeterministicState) Update(res ObserveResult) (done bool, err error) {
 
 	if island.PendingObservations != 0 {
 		if island.PendingObservations == -1 {
-			if res.Metadata.TotalObservations > 1 {
-				island.PendingObservations = res.Metadata.TotalObservations - 1
+			if res.Metadata.NumSiblings > 1 {
+				island.PendingObservations = res.Metadata.NumSiblings - 1
 			} else {
 				island.PendingObservations = 0
 			}
@@ -151,7 +155,6 @@ func (s *DeterministicState) Issue() (ProposeRequest, bool, error) {
 		IslandID: island.ID,
 	}, true, nil
 }
-
 
 func (s *DeterministicState) selectParent(island *Island) (*Program, error) {
 	selectedCluster, err := s.selectCluster(island)
@@ -356,8 +359,8 @@ type ObserveResult struct {
 }
 
 type Metadata struct {
-	IslandID          int
-	TotalObservations int
+	IslandID    int
+	NumSiblings int
 }
 
 func quantize(score ProgramScore, precision int) (ClusterScore, error) {

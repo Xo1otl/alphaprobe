@@ -35,6 +35,7 @@ llmsr-worker = { workspace = true }
 [tool.pyright]
 include = ["scripts", "artifacts/funsearch", "apps/llmsr-worker"]
 exclude = ["**/pb"]
+typeCheckingMode = "strict"
 
 [dependency-groups]
 dev = [

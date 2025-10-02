@@ -26,7 +26,7 @@ A parent is chosen via a two-step process. This is repeated to gather the requir
 
 A cluster `i` is selected from the island with probability `Pᵢ` using Boltzmann selection:
 $$P_i = \frac{\exp(s_i/T_c)}{\sum_j \exp(s_j/T_c)}$$
-- $s_i$: The quantized score that defines the cluster i. All skeletons within this cluster share this identical score.
+- $s_i$: A score that defines the cluster i. All skeletons within this cluster share this identical score.
 - $T_c$: A temperature parameter that anneals according to the schedule $T_c = T_0\left(1 - \frac{u \pmod N}{N}\right)$, where:
     - $T_0$: The initial temperature.
     - $u$: The current number of equation programs (i.e., the population size) in the island.

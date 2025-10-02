@@ -21,12 +21,12 @@ func (a *Adapter) Recv(res ProposeResult) {
 		skeletons = []Skeleton{""} // Add a dummy skeleton to carry the error.
 	}
 
-	totalObservations := len(skeletons)
+	numSiblings := len(skeletons)
 
 	for i, skeleton := range skeletons {
 		req := ObserveRequest{
 			Query:    skeleton,
-			Metadata: Metadata{IslandID: res.Metadata.IslandID, TotalObservations: totalObservations},
+			Metadata: Metadata{IslandID: res.Metadata.IslandID, NumSiblings: numSiblings},
 		}
 		if i == 0 {
 			req.Err = err
