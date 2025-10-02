@@ -4,7 +4,7 @@ The `bilevel` package provides a generic, concurrent framework for orchestrating
 
 # Overview
 
-The system is built around a central **Orchestrator** that manages two concurrent stages of workers: a **Propose** stage and an **Observe** stage. The flow of data and control is managed by a central **State** object, which issues new requests and processes results. The package offers two primary execution models: **Run**, for direct propose-observe pipelines, and **RunWithAdapter**, which introduces an **Adapter** to handle transformations between the propose and observe stages. **Error Handling** is managed asynchronously via a dedicated channel.
+The system is built around a central **Orchestrator** that manages two concurrent stages of workers: a **Propose** stage and an **Observe** stage. The flow of data and control is managed by a central **State** object, which issues new requests and processes results. The package offers two primary execution models: **Run**, for direct propose-observe pipelines, and **RunWithAdapter**, which introduces an **Adapter** to handle transformations between the propose and observe stages. **Error Handling** is managed asynchronously via a dedicated channel. For debugging and reproducibility, the package also provides an **Event Sourcing** mechanism to record and replay state interactions.
 
 # Orchestrator
 
@@ -22,6 +22,34 @@ The `State` interface is the control center of the pipeline. It is responsible f
 The `bilevel` package delegates error handling to the caller. The `State.Update` and `State.Issue` methods can return errors. The `Run` and `RunWithAdapter` functions accept an `error` channel (`errCh`) as an argument.
 
 When a method on the `State` object returns an error, the orchestrator sends this error to `errCh` without interrupting the pipeline. It is the caller's responsibility to listen on this channel and implement the desired error-handling logic, such as canceling the context to terminate all goroutines gracefully.
+
+# Event Sourcing
+
+The `bilevel` package includes an event sourcing mechanism that allows for recording and replaying all interactions with a `State` object. This is useful for debugging, testing, and ensuring reproducibility.
+
+The mechanism is implemented using a wrapper pattern that intercepts calls to `Issue` and `Update`, records them as events, and then delegates the calls to the original `State` object.
+
+### `WithEventSourcing`
+
+To enable event sourcing, wrap your `State` implementation with the `WithEventSourcing` function. This function returns a wrapped `State` and a `getTrace` function. The wrapped `State` should be passed to the orchestrator, and the `getTrace` function can be called after the run to retrieve the sequence of events.
+
+```go
+state := NewState() // Original State
+wrappedState, getTrace := bilevel.WithEventSourcing(state)
+
+// ... run the orchestrator with wrappedState ...
+
+trace := getTrace() // Retrieve the event trace
+```
+
+### `Replay`
+
+The `Replay` function takes a `State` object and a trace of events, and applies the events to the state in the same sequence they were recorded. This allows for reconstructing the state of a previous run.
+
+```go
+simulatedState := NewState()
+bilevel.Replay(simulatedState, trace)
+```
 
 # Public API
 
@@ -99,24 +127,3 @@ orchestrator := bilevel.NewOrchestrator(
 
 bilevel.RunWithAdapter(orchestrator, ctx, state, adapter, errCh)
 ```
-
-# Changelog: Added an eventsoucing feature
-### The Pattern
-
-* The wrapper stores a pointer to the original object.
-* The original variable and the wrapper's internal field reference the same object in memory.
-* Method calls on the wrapper are delegated to the original object, mutating its state.
-
-### The Workflow
-
-1.  Create and retain a variable referencing the original concrete object.
-2.  Pass this pointer to the wrapping function to get an interface.
-3.  Pass the returned interface to the framework for processing.
-4.  After processing, use the original variable, which retains its concrete type, for analysis. This removes the need for type assertions.
-
-### `context.Context`
-
-This pattern is used by `context.Context`.
-
-* Functions like `context.WithValue` return a new `context` struct that wraps the parent.
-* The new struct adds functionality (storing a value) and delegates other method calls to its parent.

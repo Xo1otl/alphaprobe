@@ -9,18 +9,6 @@ import (
 	"time"
 )
 
-type CallType string
-
-const (
-	CallIssue  CallType = "Issue"
-	CallUpdate CallType = "Update"
-)
-
-type RecordedEvent struct {
-	Type          CallType
-	ObserveResult *ObserveResult
-}
-
 type DeterministicState struct {
 	Islands               map[int]*Island
 	MaxEvaluations        int

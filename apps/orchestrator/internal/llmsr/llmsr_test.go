@@ -49,8 +49,8 @@ func newInitialState(t *testing.T, observeFn bilevel.ObserveFunc[ObserveRequest,
 
 func TestLLMSR_WithMock(t *testing.T) {
 	runnerState, initialScore := newInitialState(t, MockObserve)
-	wrappedState, trace := bilevel.WithEventSourcing(runnerState)
-	runLLMSR(t, wrappedState, MockPropose, MockObserve)
+	esState, trace := bilevel.WithEventSourcing(runnerState)
+	runLLMSR(t, esState, MockPropose, MockObserve)
 
 	events := trace()
 	logStateSummary(t, runnerState, initialScore, events)
@@ -119,8 +119,8 @@ func TestLLMSR_WithGRPCServer(t *testing.T) {
 	observeFn := NewGRPCObserve(client)
 
 	state, initialScore := newInitialState(t, observeFn)
-	wrappedState, trace := bilevel.WithEventSourcing(state)
-	runLLMSR(t, wrappedState, proposeFn, observeFn)
+	esState, trace := bilevel.WithEventSourcing(state)
+	runLLMSR(t, esState, proposeFn, observeFn)
 
 	events := trace()
 	logStateSummary(t, state, initialScore, events)
