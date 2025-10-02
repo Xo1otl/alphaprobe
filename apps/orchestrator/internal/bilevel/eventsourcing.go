@@ -37,12 +37,10 @@ type esState[PReq, ORes any] struct {
 
 func (s *esState[PReq, ORes]) Update(res ORes) (done bool, err error) {
 	s.events = append(s.events, StateEvent[ORes]{Type: CallUpdate, Payload: res})
-	done, err = s.State.Update(res)
-	return done, err
+	return s.State.Update(res)
 }
 
 func (s *esState[PReq, ORes]) Issue() (req PReq, ok bool, err error) {
 	s.events = append(s.events, StateEvent[ORes]{Type: CallIssue})
-	req, ok, err = s.State.Issue()
-	return req, ok, err
+	return s.State.Issue()
 }
