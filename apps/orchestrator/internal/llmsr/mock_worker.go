@@ -16,7 +16,7 @@ func NewScoreFromString(s string) (ProgramScore, error) {
 
 func MockPropose(ctx context.Context, req ProposeRequest) ProposeResult {
 	if len(req.Parents) == 0 {
-		return ProposeResult{Err: fmt.Errorf("no parents provided: %w", ErrInPropose)}
+		return ProposeResult{Err: fmt.Errorf("%w: no parents provided", ErrInPropose)}
 	}
 
 	bestParent := req.Parents[0]
@@ -29,7 +29,7 @@ func MockPropose(ctx context.Context, req ProposeRequest) ProposeResult {
 	parentSkeleton := bestParent.Skeleton
 	val, err := NewScoreFromString(parentSkeleton)
 	if err != nil {
-		return ProposeResult{Err: fmt.Errorf("invalid parent skeleton (%v): %w", err, ErrInPropose)}
+		return ProposeResult{Err: fmt.Errorf("%w: invalid parent skeleton: %w", ErrInPropose, err)}
 	}
 
 	newSkeletons := []Skeleton{
@@ -56,7 +56,7 @@ func MockObserve(ctx context.Context, req ObserveRequest) ObserveResult {
 		return ObserveResult{
 			Query:    req.Query,
 			Metadata: req.Metadata,
-			Err:      fmt.Errorf("invalid skeleton: (%v): %w", err, ErrInObserve),
+			Err:      fmt.Errorf("%w: invalid skeleton: %w", ErrInObserve, err),
 		}
 	}
 

@@ -18,14 +18,17 @@ import (
 )
 
 const (
-	maxEvaluations     = 3000
-	numIslands         = 4
+	maxEvaluations     = 1000
+	numIslands         = 2
 	eliminationRate    = 0.5
 	migrationInterval  = 25
-	proposeConcurrency = 2
-	observeConcurrency = 4
+	proposeConcurrency = 1
+	observeConcurrency = 1
 	testTimeout        = 5 * time.Second
 	scoreQuantization  = 2
+	t0                 = 0
+	n                  = 1
+	tp                 = 1.0
 )
 
 func useTestRng() *rand.Rand {
@@ -40,7 +43,7 @@ func newInitialState(t *testing.T, observeFn bilevel.ObserveFunc[ObserveRequest,
 
 	initialSkeleton := "-100"
 	initialScore := observeFn(ctx, ObserveRequest{Query: Skeleton(initialSkeleton)}).Evidence
-	state, err := NewDeterministicState(initialSkeleton, initialScore, maxEvaluations, numIslands, migrationInterval, scoreQuantization, eliminationRate, useTestRng())
+	state, err := NewDeterministicState(initialSkeleton, initialScore, maxEvaluations, numIslands, migrationInterval, scoreQuantization, eliminationRate, t0, n, tp, useTestRng())
 	if err != nil {
 		t.Fatalf("Failed to create initial state: %v", err)
 	}

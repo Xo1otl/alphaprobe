@@ -18,7 +18,7 @@ func NewGRPCPropose(client pb.LLMSRClient) func(context.Context, ProposeRequest)
 		pbReq := &pb.ProposeRequest{Parents: pbParents}
 		resp, err := client.Propose(ctx, pbReq)
 		if err != nil {
-			return ProposeResult{Err: fmt.Errorf("gRPC propose error (%v): %w", err, ErrInPropose)}
+			return ProposeResult{Err: fmt.Errorf("%w: gRPC propose error: %w", ErrInPropose, err)}
 		}
 
 		skeletons := make([]Skeleton, len(resp.Skeletons))
@@ -49,7 +49,7 @@ func NewGRPCObserve(client pb.LLMSRClient) func(context.Context, ObserveRequest)
 			return ObserveResult{
 				Query:    req.Query,
 				Metadata: req.Metadata,
-				Err:      fmt.Errorf("gRPC observe error (%v): %w", err, ErrInObserve),
+				Err:      fmt.Errorf("%w: gRPC observe error: %w", ErrInObserve, err),
 			}
 		}
 

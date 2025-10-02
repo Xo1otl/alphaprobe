@@ -19,11 +19,23 @@ type DeterministicState struct {
 	NumIslandsToEliminate int
 	ScoreQuantization     int
 	rng                   *rand.Rand
+	T0                    float64
+	N                     int
+	Tp                    float64
 }
 
-func NewDeterministicState(initialSkeleton Skeleton, initialScore ProgramScore, maxEvaluations, numIslands, migrationInterval, scoreQuantization int, eliminationRate float64, rng *rand.Rand) (*DeterministicState, error) {
+func NewDeterministicState(initialSkeleton Skeleton, initialScore ProgramScore, maxEvaluations, numIslands, migrationInterval, scoreQuantization int, eliminationRate float64, t0 float64, n int, tp float64, rng *rand.Rand) (*DeterministicState, error) {
 	if eliminationRate < 0 || eliminationRate >= 1 {
-		return nil, fmt.Errorf("%w", ErrInvalidEliminationRate)
+		return nil, ErrInvalidEliminationRate
+	}
+	if n <= 0 {
+		return nil, fmt.Errorf("%w: N must be positive, got %d", ErrInvalidParameter, n)
+	}
+	if t0 < 0 {
+		return nil, fmt.Errorf("%w: T0 must be non-negative, got %f", ErrInvalidParameter, t0)
+	}
+	if tp <= 0 {
+		return nil, fmt.Errorf("%w: Tp must be positive, got %f", ErrInvalidParameter, tp)
 	}
 	if rng == nil {
 		rng = rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -37,6 +49,9 @@ func NewDeterministicState(initialSkeleton Skeleton, initialScore ProgramScore, 
 		NumIslandsToEliminate: int(float64(numIslands) * eliminationRate),
 		ScoreQuantization:     scoreQuantization,
 		rng:                   rng,
+		T0:                    t0,
+		N:                     n,
+		Tp:                    tp,
 	}
 
 	initialClusterScore, err := quantize(initialScore, s.ScoreQuantization)
@@ -58,15 +73,29 @@ func NewDeterministicState(initialSkeleton Skeleton, initialScore ProgramScore, 
 }
 
 func (s *DeterministicState) Update(res ObserveResult) (done bool, err error) {
-	if res.Err != nil {
-		return true, res.Err
-	}
-	s.EvaluationsCount++
-
 	island, ok := s.Islands[res.Metadata.IslandID]
 	if !ok {
-		return true, fmt.Errorf("%w: island with ID %d", ErrIslandNotFound, res.Metadata.IslandID)
+		return true, fmt.Errorf("%w: island with ID %d not found", ErrIslandNotFound, res.Metadata.IslandID)
 	}
+
+	if island.PendingObservations != 0 {
+		if island.PendingObservations == -1 {
+			if res.Metadata.TotalObservations > 1 {
+				island.PendingObservations = res.Metadata.TotalObservations - 1
+			} else {
+				island.PendingObservations = 0
+			}
+		} else {
+			island.PendingObservations--
+		}
+	}
+
+	if res.Err != nil {
+		// Errors still count as an evaluation against the cap, but don't update island state.
+		s.EvaluationsCount++
+		return s.EvaluationsCount >= s.MaxEvaluations, nil
+	}
+	s.EvaluationsCount++
 
 	program := &Program{Skeleton: res.Query, Score: res.Evidence}
 	if err := island.addProgram(program, s.ScoreQuantization); err != nil {
@@ -83,21 +112,25 @@ func (s *DeterministicState) Update(res ObserveResult) (done bool, err error) {
 }
 
 func (s *DeterministicState) Issue() (ProposeRequest, bool, error) {
-	islandIDs := make([]int, 0, len(s.Islands))
-	for id := range s.Islands {
-		islandIDs = append(islandIDs, id)
+	availableIslandIDs := make([]int, 0, len(s.Islands))
+	for id, island := range s.Islands {
+		if island.PendingObservations == 0 {
+			availableIslandIDs = append(availableIslandIDs, id)
+		}
 	}
-	sort.Ints(islandIDs)
-	if len(islandIDs) == 0 {
+
+	if len(availableIslandIDs) == 0 {
 		return ProposeRequest{}, false, nil
 	}
-	randomID := islandIDs[s.rng.Intn(len(islandIDs))]
+	sort.Ints(availableIslandIDs)
+
+	randomID := availableIslandIDs[s.rng.Intn(len(availableIslandIDs))]
 	island := s.Islands[randomID]
 
 	if len(island.Clusters) == 0 {
 		for _, otherIsland := range s.Islands {
 			if len(otherIsland.Clusters) > 0 {
-				return ProposeRequest{}, false, fmt.Errorf("%w: island %d", ErrEmptyIslandSelected, island.ID)
+				return ProposeRequest{}, false, fmt.Errorf("%w: island %d is empty, but other islands are not", ErrEmptyIslandSelected, island.ID)
 			}
 		}
 	}
@@ -111,11 +144,14 @@ func (s *DeterministicState) Issue() (ProposeRequest, bool, error) {
 		return ProposeRequest{}, false, err
 	}
 
+	island.PendingObservations = -1
+
 	return ProposeRequest{
 		Parents:  []*Program{parent1, parent2},
 		IslandID: island.ID,
 	}, true, nil
 }
+
 
 func (s *DeterministicState) selectParent(island *Island) (*Program, error) {
 	selectedCluster, err := s.selectCluster(island)
@@ -127,7 +163,7 @@ func (s *DeterministicState) selectParent(island *Island) (*Program, error) {
 
 func (s *DeterministicState) selectCluster(island *Island) (*Cluster, error) {
 	if len(island.Clusters) == 0 {
-		return nil, fmt.Errorf("%w: island %d", ErrSelectionFromEmptyIsland, island.ID)
+		return nil, fmt.Errorf("%w: cannot select cluster from empty island %d", ErrSelectionFromEmptyIsland, island.ID)
 	}
 
 	clusterScores := make([]ClusterScore, 0, len(island.Clusters))
@@ -146,14 +182,14 @@ func (s *DeterministicState) selectCluster(island *Island) (*Cluster, error) {
 		}
 	}
 
-	tc := T0*(1-float64(island.PopulationSize%N)/float64(N)) + Epsilon
+	tc := s.T0*(1-float64(island.PopulationSize%s.N)/float64(s.N)) + Epsilon
 
 	clusterWeightFunc := func(c *Cluster) float64 {
 		return math.Exp((c.Score - maxClusterScore) / tc)
 	}
 	selectedCluster, err := weightedChoice(clusters, clusterWeightFunc, s.rng)
 	if err != nil {
-		return nil, fmt.Errorf("cluster selection failed in island %d: %w", island.ID, err)
+		return nil, fmt.Errorf("%w in island %d: %w", ErrClusterSelectionFailed, island.ID, err)
 	}
 	return selectedCluster, nil
 }
@@ -161,7 +197,7 @@ func (s *DeterministicState) selectCluster(island *Island) (*Cluster, error) {
 func (s *DeterministicState) selectProgramFromCluster(cluster *Cluster, islandID int) (*Program, error) {
 	programs := cluster.Programs
 	if len(programs) == 0 {
-		return nil, fmt.Errorf("%w in island %d", ErrInvalidCluster, islandID)
+		return nil, fmt.Errorf("%w: cannot select program from empty cluster in island %d", ErrInvalidCluster, islandID)
 	}
 	if len(programs) == 1 {
 		return programs[0], nil
@@ -181,11 +217,11 @@ func (s *DeterministicState) selectProgramFromCluster(cluster *Cluster, islandID
 	lengthRange := float64(maxLength-minLength) + Epsilon
 	skeletonWeightFunc := func(p *Program) float64 {
 		normalizedLength := float64(len(p.Skeleton)-minLength) / lengthRange
-		return math.Exp(-normalizedLength / Tp)
+		return math.Exp(-normalizedLength / s.Tp)
 	}
 	selectedProgram, err := weightedChoice(programs, skeletonWeightFunc, s.rng)
 	if err != nil {
-		return nil, fmt.Errorf("program selection failed from cluster with score %f in island %d: %w", cluster.Score, islandID, err)
+		return nil, fmt.Errorf("%w from cluster with score %f in island %d: %w", ErrProgramSelectionFailed, cluster.Score, islandID, err)
 	}
 
 	return selectedProgram, nil
@@ -215,7 +251,7 @@ func (s *DeterministicState) manageIslands() error {
 	culled := allIslands[numSurvivors:]
 
 	if len(survivors) == 0 || survivors[len(survivors)-1].BestProgram == nil {
-		return fmt.Errorf("%w", ErrNoElitesFound)
+		return ErrNoElitesFound
 	}
 
 	for _, islandToReplace := range culled {
@@ -261,12 +297,13 @@ func weightedChoice[T any](items []T, getWeight func(T) float64, rng *rand.Rand)
 }
 
 type Island struct {
-	ID               int
-	Clusters         map[ClusterScore]*Cluster
-	PopulationSize   int
-	EvaluationsCount int
-	CullingCount     int
-	BestProgram      *Program
+	ID                  int
+	Clusters            map[ClusterScore]*Cluster
+	PopulationSize      int
+	EvaluationsCount    int
+	CullingCount        int
+	BestProgram         *Program
+	PendingObservations int
 }
 
 func (i *Island) addProgram(p *Program, quantization int) error {
@@ -319,14 +356,15 @@ type ObserveResult struct {
 }
 
 type Metadata struct {
-	IslandID int
+	IslandID          int
+	TotalObservations int
 }
 
 func quantize(score ProgramScore, precision int) (ClusterScore, error) {
 	key := strconv.FormatFloat(score, 'f', precision, 64)
 	f, err := strconv.ParseFloat(key, 64)
 	if err != nil {
-		return 0, fmt.Errorf("failed to parse quantized score string '%s': %w", key, err)
+		return 0, fmt.Errorf("%w: failed to parse '%s': %w", ErrQuantization, key, err)
 	}
 	return f, nil
 }
@@ -352,8 +390,5 @@ type ProgramScore = float64
 type ClusterScore = float64
 
 const (
-	T0      = 1.0
-	N       = 100
-	Tp      = 1.0
-	Epsilon = 1e-6
+	Epsilon = 1e-9
 )

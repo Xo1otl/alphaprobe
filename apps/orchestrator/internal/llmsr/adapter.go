@@ -11,14 +11,25 @@ func NewAdapter() *Adapter {
 }
 
 func (a *Adapter) Recv(res ProposeResult) {
-	if res.Err != nil {
-		a.queue = append(a.queue, ObserveRequest{Metadata: res.Metadata, Err: res.Err})
-		return
+	err := res.Err
+	if err == nil && len(res.Skeletons) == 0 {
+		err = ErrNoSkeletonsGenerated
 	}
-	for _, skeleton := range res.Skeletons {
+
+	skeletons := res.Skeletons
+	if len(skeletons) == 0 {
+		skeletons = []Skeleton{""} // Add a dummy skeleton to carry the error.
+	}
+
+	totalObservations := len(skeletons)
+
+	for i, skeleton := range skeletons {
 		req := ObserveRequest{
 			Query:    skeleton,
-			Metadata: res.Metadata,
+			Metadata: Metadata{IslandID: res.Metadata.IslandID, TotalObservations: totalObservations},
+		}
+		if i == 0 {
+			req.Err = err
 		}
 		a.queue = append(a.queue, req)
 	}
