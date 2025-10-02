@@ -14,10 +14,8 @@ func NewScoreFromString(s string) (ProgramScore, error) {
 	return f, nil
 }
 
-// MockPropose generates a predictable set of new skeletons for deterministic testing.
 func MockPropose(ctx context.Context, req ProposeRequest) ProposeResult {
 	// time.Sleep(time.Duration(rand.Intn(10)) * time.Millisecond)
-
 	if len(req.Parents) == 0 {
 		return ProposeResult{Err: fmt.Errorf("no parents provided: %w", ErrInPropose)}
 	}
@@ -46,7 +44,6 @@ func MockPropose(ctx context.Context, req ProposeRequest) ProposeResult {
 	}
 }
 
-// MockObserve provides a deterministic, predictable score based on the skeleton's content.
 func MockObserve(ctx context.Context, req ObserveRequest) ObserveResult {
 	// time.Sleep(time.Duration(rand.Intn(10)) * time.Millisecond)
 	if req.Err != nil {

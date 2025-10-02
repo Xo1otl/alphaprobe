@@ -80,7 +80,7 @@ func (s *State) Update(res ObserveResult) (done bool, err error) {
 	return s.EvaluationsCount >= s.TotalEvaluations, nil
 }
 
-func (s *State) NewRequest() (*Island, bool, error) {
+func (s *State) Issue() (*Island, bool, error) {
 	if len(s.AvailableIslandIDs) == 0 {
 		return nil, false, nil
 	}

@@ -12,7 +12,7 @@ type ProposeFunc[PReq, PRes any] func(ctx context.Context, req PReq) PRes
 type ObserveFunc[OReq, ORes any] func(ctx context.Context, req OReq) ORes
 type State[PReq, ORes any] interface {
 	Update(res ORes) (done bool, err error)
-	NewRequest() (req PReq, ok bool, err error)
+	Issue() (req PReq, ok bool, err error)
 }
 type Adapter[PRes, OReq any] interface {
 	Recv(res PRes)
@@ -52,7 +52,7 @@ func Run[PReq, PRes, ORes any](
 	proposeResCh := make(chan PRes, orchestrator.proposeConcurrency)
 	observeResCh := make(chan ORes, orchestrator.observeConcurrency)
 
-	onUpdate := func(res ORes) (done bool) {
+	onResult := func(res ORes) (done bool) {
 		done, err := state.Update(res)
 		if err != nil {
 			errCh <- err
@@ -60,8 +60,8 @@ func Run[PReq, PRes, ORes any](
 		return done
 	}
 
-	onNewRequest := func() (req PReq, ok bool) {
-		req, ok, err := state.NewRequest()
+	onNext := func() (req PReq, ok bool) {
+		req, ok, err := state.Issue()
 		if err != nil {
 			errCh <- err
 		}
@@ -71,7 +71,7 @@ func Run[PReq, PRes, ORes any](
 	ring := pipeline.NewRing(ctx)
 	pipeline.GoWorkers(ring, orchestrator.proposeConcurrency, orchestrator.proposeFn, proposeReqCh, proposeResCh)
 	pipeline.GoWorkers(ring, orchestrator.observeConcurrency, orchestrator.observeFn, proposeResCh, observeResCh)
-	pipeline.GoController(ring, onUpdate, onNewRequest, observeResCh, proposeReqCh)
+	pipeline.GoController(ring, onResult, onNext, observeResCh, proposeReqCh)
 
 	ring.Wait()
 }
@@ -88,7 +88,7 @@ func RunWithAdapter[PReq, PRes, OReq, ORes any](
 	observeReqCh := make(chan OReq, orchestrator.observeConcurrency)
 	observeResCh := make(chan ORes, orchestrator.observeConcurrency)
 
-	onUpdate := func(res ORes) (done bool) {
+	onResult := func(res ORes) (done bool) {
 		done, err := state.Update(res)
 		if err != nil {
 			errCh <- err
@@ -96,8 +96,8 @@ func RunWithAdapter[PReq, PRes, OReq, ORes any](
 		return done
 	}
 
-	onNewRequest := func() (req PReq, ok bool) {
-		req, ok, err := state.NewRequest()
+	onNext := func() (req PReq, ok bool) {
+		req, ok, err := state.Issue()
 		if err != nil {
 			errCh <- err
 		}
@@ -108,7 +108,7 @@ func RunWithAdapter[PReq, PRes, OReq, ORes any](
 	pipeline.GoWorkers(ring, orchestrator.proposeConcurrency, orchestrator.proposeFn, proposeReqCh, proposeResCh)
 	pipeline.GoController(ring, func(res PRes) (done bool) { adapter.Recv(res); return false }, adapter.Next, proposeResCh, observeReqCh)
 	pipeline.GoWorkers(ring, orchestrator.observeConcurrency, orchestrator.observeFn, observeReqCh, observeResCh)
-	pipeline.GoController(ring, onUpdate, onNewRequest, observeResCh, proposeReqCh)
+	pipeline.GoController(ring, onResult, onNext, observeResCh, proposeReqCh)
 
 	ring.Wait()
 }

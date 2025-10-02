@@ -76,7 +76,7 @@ func (s *State) Update(res ObserveResult) (done bool, err error) {
 	return s.EvaluationsCount >= s.MaxEvaluations, nil
 }
 
-func (s *State) NewRequest() (ProposeRequest, bool, error) {
+func (s *State) Issue() (ProposeRequest, bool, error) {
 	islandIDs := make([]int, 0, len(s.Islands))
 	for id := range s.Islands {
 		islandIDs = append(islandIDs, id)
