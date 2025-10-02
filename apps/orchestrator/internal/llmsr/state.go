@@ -17,6 +17,7 @@ type State struct {
 	InitialSkeleton       Skeleton
 	NumIslandsToEliminate int
 	ScoreQuantization     int
+	CallSequence          []string
 }
 
 func NewState(initialSkeleton Skeleton, initialScore ProgramScore, maxEvaluations, numIslands, migrationInterval, scoreQuantization int, eliminationRate float64) (*State, error) {
@@ -52,6 +53,7 @@ func NewState(initialSkeleton Skeleton, initialScore ProgramScore, maxEvaluation
 }
 
 func (s *State) Update(res ObserveResult) (done bool, err error) {
+	s.CallSequence = append(s.CallSequence, "Update")
 	if res.Err != nil {
 		return true, res.Err
 	}
@@ -77,6 +79,7 @@ func (s *State) Update(res ObserveResult) (done bool, err error) {
 }
 
 func (s *State) Issue() (ProposeRequest, bool, error) {
+	s.CallSequence = append(s.CallSequence, "Issue")
 	islandIDs := make([]int, 0, len(s.Islands))
 	for id := range s.Islands {
 		islandIDs = append(islandIDs, id)

@@ -15,7 +15,6 @@ func NewScoreFromString(s string) (ProgramScore, error) {
 }
 
 func MockPropose(ctx context.Context, req ProposeRequest) ProposeResult {
-	// time.Sleep(time.Duration(rand.Intn(10)) * time.Millisecond)
 	if len(req.Parents) == 0 {
 		return ProposeResult{Err: fmt.Errorf("no parents provided: %w", ErrInPropose)}
 	}
@@ -45,7 +44,6 @@ func MockPropose(ctx context.Context, req ProposeRequest) ProposeResult {
 }
 
 func MockObserve(ctx context.Context, req ObserveRequest) ObserveResult {
-	// time.Sleep(time.Duration(rand.Intn(10)) * time.Millisecond)
 	if req.Err != nil {
 		return ObserveResult{
 			Metadata: req.Metadata,
