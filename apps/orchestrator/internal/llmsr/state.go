@@ -6,9 +6,22 @@ import (
 	"math/rand"
 	"sort"
 	"strconv"
+	"time"
 )
 
-type State struct {
+type CallType string
+
+const (
+	CallIssue  CallType = "Issue"
+	CallUpdate CallType = "Update"
+)
+
+type RecordedEvent struct {
+	Type          CallType
+	ObserveResult *ObserveResult
+}
+
+type DeterministicState struct {
 	Islands               map[int]*Island
 	MaxEvaluations        int
 	EvaluationsCount      int
@@ -17,14 +30,18 @@ type State struct {
 	InitialSkeleton       Skeleton
 	NumIslandsToEliminate int
 	ScoreQuantization     int
-	CallSequence          []string
+	Trace                 []RecordedEvent
+	rng                   *rand.Rand
 }
 
-func NewState(initialSkeleton Skeleton, initialScore ProgramScore, maxEvaluations, numIslands, migrationInterval, scoreQuantization int, eliminationRate float64) (*State, error) {
+func NewDeterministicState(initialSkeleton Skeleton, initialScore ProgramScore, maxEvaluations, numIslands, migrationInterval, scoreQuantization int, eliminationRate float64, rng *rand.Rand) (*DeterministicState, error) {
 	if eliminationRate < 0 || eliminationRate >= 1 {
 		return nil, fmt.Errorf("%w", ErrInvalidEliminationRate)
 	}
-	s := &State{
+	if rng == nil {
+		rng = rand.New(rand.NewSource(time.Now().UnixNano()))
+	}
+	s := &DeterministicState{
 		Islands:               make(map[int]*Island, numIslands),
 		MaxEvaluations:        maxEvaluations,
 		MigrationInterval:     migrationInterval,
@@ -32,6 +49,7 @@ func NewState(initialSkeleton Skeleton, initialScore ProgramScore, maxEvaluation
 		InitialSkeleton:       initialSkeleton,
 		NumIslandsToEliminate: int(float64(numIslands) * eliminationRate),
 		ScoreQuantization:     scoreQuantization,
+		rng:                   rng,
 	}
 
 	initialClusterScore, err := quantize(initialScore, s.ScoreQuantization)
@@ -52,8 +70,17 @@ func NewState(initialSkeleton Skeleton, initialScore ProgramScore, maxEvaluation
 	return s, nil
 }
 
-func (s *State) Update(res ObserveResult) (done bool, err error) {
-	s.CallSequence = append(s.CallSequence, "Update")
+func (s *DeterministicState) Update(res ObserveResult) (done bool, err error) {
+	s.Trace = append(s.Trace, RecordedEvent{Type: CallUpdate, ObserveResult: &res})
+	return s.update(res)
+}
+
+func (s *DeterministicState) Issue() (ProposeRequest, bool, error) {
+	s.Trace = append(s.Trace, RecordedEvent{Type: CallIssue})
+	return s.issue()
+}
+
+func (s *DeterministicState) update(res ObserveResult) (done bool, err error) {
 	if res.Err != nil {
 		return true, res.Err
 	}
@@ -78,16 +105,16 @@ func (s *State) Update(res ObserveResult) (done bool, err error) {
 	return s.EvaluationsCount >= s.MaxEvaluations, nil
 }
 
-func (s *State) Issue() (ProposeRequest, bool, error) {
-	s.CallSequence = append(s.CallSequence, "Issue")
+func (s *DeterministicState) issue() (ProposeRequest, bool, error) {
 	islandIDs := make([]int, 0, len(s.Islands))
 	for id := range s.Islands {
 		islandIDs = append(islandIDs, id)
 	}
+	sort.Ints(islandIDs)
 	if len(islandIDs) == 0 {
 		return ProposeRequest{}, false, nil
 	}
-	randomID := islandIDs[rand.Intn(len(islandIDs))]
+	randomID := islandIDs[s.rng.Intn(len(islandIDs))]
 	island := s.Islands[randomID]
 
 	if len(island.Clusters) == 0 {
@@ -113,7 +140,7 @@ func (s *State) Issue() (ProposeRequest, bool, error) {
 	}, true, nil
 }
 
-func (s *State) selectParent(island *Island) (*Program, error) {
+func (s *DeterministicState) selectParent(island *Island) (*Program, error) {
 	selectedCluster, err := s.selectCluster(island)
 	if err != nil {
 		return nil, err
@@ -121,14 +148,21 @@ func (s *State) selectParent(island *Island) (*Program, error) {
 	return s.selectProgramFromCluster(selectedCluster, island.ID)
 }
 
-func (s *State) selectCluster(island *Island) (*Cluster, error) {
+func (s *DeterministicState) selectCluster(island *Island) (*Cluster, error) {
 	if len(island.Clusters) == 0 {
 		return nil, fmt.Errorf("%w: island %d", ErrSelectionFromEmptyIsland, island.ID)
 	}
 
+	clusterScores := make([]ClusterScore, 0, len(island.Clusters))
+	for score := range island.Clusters {
+		clusterScores = append(clusterScores, score)
+	}
+	sort.Float64s(clusterScores)
+
 	clusters := make([]*Cluster, 0, len(island.Clusters))
 	maxClusterScore := ClusterScore(math.Inf(-1))
-	for _, cluster := range island.Clusters {
+	for _, score := range clusterScores {
+		cluster := island.Clusters[score]
 		clusters = append(clusters, cluster)
 		if cluster.Score > maxClusterScore {
 			maxClusterScore = cluster.Score
@@ -140,14 +174,14 @@ func (s *State) selectCluster(island *Island) (*Cluster, error) {
 	clusterWeightFunc := func(c *Cluster) float64 {
 		return math.Exp((c.Score - maxClusterScore) / tc)
 	}
-	selectedCluster, err := weightedChoice(clusters, clusterWeightFunc)
+	selectedCluster, err := weightedChoice(clusters, clusterWeightFunc, s.rng)
 	if err != nil {
 		return nil, fmt.Errorf("cluster selection failed in island %d: %w", island.ID, err)
 	}
 	return selectedCluster, nil
 }
 
-func (s *State) selectProgramFromCluster(cluster *Cluster, islandID int) (*Program, error) {
+func (s *DeterministicState) selectProgramFromCluster(cluster *Cluster, islandID int) (*Program, error) {
 	programs := cluster.Programs
 	if len(programs) == 0 {
 		return nil, fmt.Errorf("%w in island %d", ErrInvalidCluster, islandID)
@@ -172,7 +206,7 @@ func (s *State) selectProgramFromCluster(cluster *Cluster, islandID int) (*Progr
 		normalizedLength := float64(len(p.Skeleton)-minLength) / lengthRange
 		return math.Exp(-normalizedLength / Tp)
 	}
-	selectedProgram, err := weightedChoice(programs, skeletonWeightFunc)
+	selectedProgram, err := weightedChoice(programs, skeletonWeightFunc, s.rng)
 	if err != nil {
 		return nil, fmt.Errorf("program selection failed from cluster with score %f in island %d: %w", cluster.Score, islandID, err)
 	}
@@ -180,7 +214,7 @@ func (s *State) selectProgramFromCluster(cluster *Cluster, islandID int) (*Progr
 	return selectedProgram, nil
 }
 
-func (s *State) manageIslands() error {
+func (s *DeterministicState) manageIslands() error {
 	if len(s.Islands) <= s.NumIslandsToEliminate {
 		return nil
 	}
@@ -191,7 +225,12 @@ func (s *State) manageIslands() error {
 	}
 
 	sort.Slice(allIslands, func(i, j int) bool {
-		return allIslands[i].BestProgram.Score > allIslands[j].BestProgram.Score
+		scoreI := allIslands[i].BestProgram.Score
+		scoreJ := allIslands[j].BestProgram.Score
+		if scoreI != scoreJ {
+			return scoreI > scoreJ
+		}
+		return allIslands[i].ID < allIslands[j].ID
 	})
 
 	numSurvivors := len(allIslands) - s.NumIslandsToEliminate
@@ -203,7 +242,7 @@ func (s *State) manageIslands() error {
 	}
 
 	for _, islandToReplace := range culled {
-		randomSurvivor := survivors[rand.Intn(len(survivors))]
+		randomSurvivor := survivors[s.rng.Intn(len(survivors))]
 		elite := randomSurvivor.BestProgram
 		if err := islandToReplace.resetWithElite(elite, s.ScoreQuantization); err != nil {
 			return err
@@ -212,7 +251,7 @@ func (s *State) manageIslands() error {
 	return nil
 }
 
-func weightedChoice[T any](items []T, getWeight func(T) float64) (T, error) {
+func weightedChoice[T any](items []T, getWeight func(T) float64, rng *rand.Rand) (T, error) {
 	var zero T
 	if len(items) == 0 {
 		return zero, ErrSelectionFromEmptySlice
@@ -233,7 +272,7 @@ func weightedChoice[T any](items []T, getWeight func(T) float64) (T, error) {
 		return zero, ErrNumericalInstability
 	}
 
-	randVal := rand.Float64() * sumWeights
+	randVal := rng.Float64() * sumWeights
 	cumulativeWeight := 0.0
 	for i, w := range weights {
 		cumulativeWeight += w

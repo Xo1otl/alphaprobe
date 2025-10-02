@@ -5,6 +5,7 @@ import (
 	"alphaprobe/orchestrator/internal/pb"
 	"bufio"
 	"context"
+	"math/rand"
 	"os/exec"
 	"sort"
 	"strings"
@@ -27,18 +28,38 @@ const (
 	scoreQuantization  = 2
 )
 
+func useTestRng() *rand.Rand {
+	return rand.New(rand.NewSource(42))
+}
+
+func newInitialState(t *testing.T, observeFn bilevel.ObserveFunc[ObserveRequest, ObserveResult]) (*DeterministicState, float64) {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+
+	initialSkeleton := "-100"
+	initialScore := observeFn(ctx, ObserveRequest{Query: Skeleton(initialSkeleton)}).Evidence
+	state, err := NewDeterministicState(initialSkeleton, initialScore, maxEvaluations, numIslands, migrationInterval, scoreQuantization, eliminationRate, useTestRng())
+	if err != nil {
+		t.Fatalf("Failed to create initial state: %v", err)
+	}
+	return state, initialScore
+}
+
 func TestLLMSR_WithMock(t *testing.T) {
-	state, initialScore := runLLMSR(t, MockPropose, MockObserve)
-	grpcCallSequence := state.CallSequence
+	runnerState, initialScore := newInitialState(t, MockObserve)
+	runLLMSR(t, runnerState, MockPropose, MockObserve)
 
-	logStateSummary(t, state, initialScore)
+	logStateSummary(t, runnerState, initialScore)
 
-	assert.True(t, state.EvaluationsCount >= maxEvaluations, "Should have completed at least the specified number of evaluations")
-	assert.Greater(t, getBestScore(state), initialScore, "The final best score should be better (greater) than the initial score")
+	assert.True(t, runnerState.EvaluationsCount >= maxEvaluations, "Should have completed at least the specified number of evaluations")
+	assert.Greater(t, getBestScore(runnerState), initialScore, "The final best score should be better (greater) than the initial score")
 
 	t.Log("--- Running Simulation with sequence and Mock workers ---")
 
-	simulatedState := runSimulation(t, grpcCallSequence, MockPropose, MockObserve)
+	simulatedState, _ := newInitialState(t, MockObserve)
+	replay(simulatedState, runnerState.Trace)
 	logStateSummary(t, simulatedState, initialScore)
 }
 
@@ -95,8 +116,8 @@ func TestLLMSR_WithGRPCServer(t *testing.T) {
 	proposeFn := NewGRPCPropose(client)
 	observeFn := NewGRPCObserve(client)
 
-	state, initialScore := runLLMSR(t, proposeFn, observeFn)
-	callSequence := state.CallSequence
+	state, initialScore := newInitialState(t, observeFn)
+	runLLMSR(t, state, proposeFn, observeFn)
 
 	logStateSummary(t, state, initialScore)
 
@@ -105,22 +126,16 @@ func TestLLMSR_WithGRPCServer(t *testing.T) {
 
 	t.Log("--- Running Simulation with gRPC sequence and Mock workers ---")
 
-	simulatedState := runSimulation(t, callSequence, MockPropose, MockObserve)
+	simulatedState, _ := newInitialState(t, MockObserve)
+	replay(simulatedState, state.Trace)
 	logStateSummary(t, simulatedState, initialScore)
 }
 
-func runLLMSR(t *testing.T, proposeFn bilevel.ProposeFunc[ProposeRequest, ProposeResult], observeFn bilevel.ObserveFunc[ObserveRequest, ObserveResult]) (*State, float64) {
+func runLLMSR(t *testing.T, state *DeterministicState, proposeFn bilevel.ProposeFunc[ProposeRequest, ProposeResult], observeFn bilevel.ObserveFunc[ObserveRequest, ObserveResult]) {
 	t.Helper()
 
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
-
-	initialSkeleton := "-100"
-	initialScore := observeFn(ctx, ObserveRequest{Query: Skeleton(initialSkeleton)}).Evidence
-	state, err := NewState(initialSkeleton, initialScore, maxEvaluations, numIslands, migrationInterval, scoreQuantization, eliminationRate)
-	if err != nil {
-		t.Fatalf("Failed to create initial state: %v", err)
-	}
 
 	adapter := NewAdapter()
 
@@ -145,10 +160,9 @@ func runLLMSR(t *testing.T, proposeFn bilevel.ProposeFunc[ProposeRequest, Propos
 	if ctx.Err() == context.DeadlineExceeded {
 		t.Fatal("Test timed out, indicating a potential deadlock or server issue.")
 	}
-	return state, initialScore
 }
 
-func logStateSummary(t *testing.T, state *State, initialScore float64) {
+func logStateSummary(t *testing.T, state *DeterministicState, initialScore float64) {
 	t.Helper()
 	t.Log("--- State Summary ---")
 	t.Logf("Total Islands: %d", len(state.Islands))
@@ -193,14 +207,14 @@ func logStateSummary(t *testing.T, state *State, initialScore float64) {
 	var sequenceBuilder strings.Builder
 	issueCount := 0
 	updateCount := 0
-	for _, call := range state.CallSequence {
-		if len(call) > 0 {
-			sequenceBuilder.WriteByte(call[0])
+	for _, event := range state.Trace {
+		if len(event.Type) > 0 {
+			sequenceBuilder.WriteByte(event.Type[0])
 		}
-		switch call {
-		case "Issue":
+		switch event.Type {
+		case CallIssue:
 			issueCount++
-		case "Update":
+		case CallUpdate:
 			updateCount++
 		}
 	}
@@ -214,7 +228,7 @@ func logStateSummary(t *testing.T, state *State, initialScore float64) {
 	t.Log("---------------------")
 }
 
-func getBestScore(s *State) ProgramScore {
+func getBestScore(s *DeterministicState) ProgramScore {
 	bestScore := ProgramScore(-1e9)
 	for _, island := range s.Islands {
 		islandBest := island.BestProgram.Score
@@ -225,52 +239,13 @@ func getBestScore(s *State) ProgramScore {
 	return bestScore
 }
 
-func runSimulation(t *testing.T, callSequence []string, proposeFn bilevel.ProposeFunc[ProposeRequest, ProposeResult], observeFn bilevel.ObserveFunc[ObserveRequest, ObserveResult]) *State {
-	t.Helper()
-
-	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
-	defer cancel()
-
-	initialSkeleton := "-100"
-	initialScore := observeFn(ctx, ObserveRequest{Query: Skeleton(initialSkeleton)}).Evidence
-	state, err := NewState(initialSkeleton, initialScore, maxEvaluations, numIslands, migrationInterval, scoreQuantization, eliminationRate)
-	if err != nil {
-		t.Fatalf("Failed to create initial state: %v", err)
-	}
-
-	skeletonsToObserve := make([]ObserveRequest, 0)
-
-	for _, call := range callSequence {
-		if call == "Issue" {
-			proposeReq, ok, err := state.Issue()
-			if err != nil {
-				t.Fatalf("Error issuing propose request: %v", err)
-			}
-			if ok {
-				proposeResult := proposeFn(ctx, proposeReq)
-				for _, skeleton := range proposeResult.Skeletons {
-					skeletonsToObserve = append(skeletonsToObserve, ObserveRequest{
-						Query:    skeleton,
-						Metadata: Metadata{IslandID: proposeReq.IslandID},
-					})
-				}
-			}
-		} else if call == "Update" {
-			if len(skeletonsToObserve) > 0 {
-				observeReq := skeletonsToObserve[0]
-				skeletonsToObserve = skeletonsToObserve[1:]
-
-				observeResult := observeFn(ctx, observeReq)
-				done, err := state.Update(observeResult)
-				if err != nil {
-					t.Fatalf("Error updating state: %v", err)
-				}
-				if done {
-					break
-				}
-			}
+func replay(state *DeterministicState, trace []RecordedEvent) {
+	for _, event := range trace {
+		switch event.Type {
+		case CallIssue:
+			_, _, _ = state.Issue()
+		case CallUpdate:
+			_, _ = state.Update(*event.ObserveResult)
 		}
 	}
-
-	return state
 }
