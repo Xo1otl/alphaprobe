@@ -49,9 +49,11 @@ func newInitialState(t *testing.T, observeFn bilevel.ObserveFunc[ObserveRequest,
 
 func TestLLMSR_WithMock(t *testing.T) {
 	runnerState, initialScore := newInitialState(t, MockObserve)
-	runLLMSR(t, runnerState, MockPropose, MockObserve)
+	wrappedState, trace := bilevel.WithEventSourcing(runnerState)
+	runLLMSR(t, wrappedState, MockPropose, MockObserve)
 
-	logStateSummary(t, runnerState, initialScore)
+	events := trace()
+	logStateSummary(t, runnerState, initialScore, events)
 
 	assert.True(t, runnerState.EvaluationsCount >= maxEvaluations, "Should have completed at least the specified number of evaluations")
 	assert.Greater(t, getBestScore(runnerState), initialScore, "The final best score should be better (greater) than the initial score")
@@ -59,8 +61,8 @@ func TestLLMSR_WithMock(t *testing.T) {
 	t.Log("--- Running Simulation with sequence and Mock workers ---")
 
 	simulatedState, _ := newInitialState(t, MockObserve)
-	replay(simulatedState, runnerState.Trace)
-	logStateSummary(t, simulatedState, initialScore)
+	bilevel.Replay(simulatedState, events)
+	logStateSummary(t, simulatedState, initialScore, events)
 }
 
 func TestLLMSR_WithGRPCServer(t *testing.T) {
@@ -117,9 +119,11 @@ func TestLLMSR_WithGRPCServer(t *testing.T) {
 	observeFn := NewGRPCObserve(client)
 
 	state, initialScore := newInitialState(t, observeFn)
-	runLLMSR(t, state, proposeFn, observeFn)
+	wrappedState, trace := bilevel.WithEventSourcing(state)
+	runLLMSR(t, wrappedState, proposeFn, observeFn)
 
-	logStateSummary(t, state, initialScore)
+	events := trace()
+	logStateSummary(t, state, initialScore, events)
 
 	assert.True(t, state.EvaluationsCount >= maxEvaluations, "Should have completed at least the specified number of evaluations")
 	assert.Greater(t, getBestScore(state), initialScore, "The final best score should be better (greater) than the initial score")
@@ -127,11 +131,11 @@ func TestLLMSR_WithGRPCServer(t *testing.T) {
 	t.Log("--- Running Simulation with gRPC sequence and Mock workers ---")
 
 	simulatedState, _ := newInitialState(t, MockObserve)
-	replay(simulatedState, state.Trace)
-	logStateSummary(t, simulatedState, initialScore)
+	bilevel.Replay(simulatedState, events)
+	logStateSummary(t, simulatedState, initialScore, events)
 }
 
-func runLLMSR(t *testing.T, state *DeterministicState, proposeFn bilevel.ProposeFunc[ProposeRequest, ProposeResult], observeFn bilevel.ObserveFunc[ObserveRequest, ObserveResult]) {
+func runLLMSR(t *testing.T, state bilevel.State[ProposeRequest, ObserveResult], proposeFn bilevel.ProposeFunc[ProposeRequest, ProposeResult], observeFn bilevel.ObserveFunc[ObserveRequest, ObserveResult]) {
 	t.Helper()
 
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
@@ -162,7 +166,7 @@ func runLLMSR(t *testing.T, state *DeterministicState, proposeFn bilevel.Propose
 	}
 }
 
-func logStateSummary(t *testing.T, state *DeterministicState, initialScore float64) {
+func logStateSummary(t *testing.T, state *DeterministicState, initialScore float64, trace []bilevel.StateEvent[ObserveResult]) {
 	t.Helper()
 	t.Log("--- State Summary ---")
 	t.Logf("Total Islands: %d", len(state.Islands))
@@ -207,14 +211,14 @@ func logStateSummary(t *testing.T, state *DeterministicState, initialScore float
 	var sequenceBuilder strings.Builder
 	issueCount := 0
 	updateCount := 0
-	for _, event := range state.Trace {
+	for _, event := range trace {
 		if len(event.Type) > 0 {
 			sequenceBuilder.WriteByte(event.Type[0])
 		}
 		switch event.Type {
-		case CallIssue:
+		case bilevel.CallIssue:
 			issueCount++
-		case CallUpdate:
+		case bilevel.CallUpdate:
 			updateCount++
 		}
 	}
@@ -237,15 +241,4 @@ func getBestScore(s *DeterministicState) ProgramScore {
 		}
 	}
 	return bestScore
-}
-
-func replay(state *DeterministicState, trace []RecordedEvent) {
-	for _, event := range trace {
-		switch event.Type {
-		case CallIssue:
-			_, _, _ = state.Issue()
-		case CallUpdate:
-			_, _ = state.Update(*event.ObserveResult)
-		}
-	}
 }

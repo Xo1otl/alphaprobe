@@ -1,0 +1,48 @@
+package bilevel
+
+type CallType string
+
+const (
+	CallIssue  CallType = "Issue"
+	CallUpdate CallType = "Update"
+)
+
+type StateEvent[ORes any] struct {
+	Type    CallType
+	Payload ORes // nil if Type is CallIssue
+}
+
+func WithEventSourcing[PReq, ORes any](s State[PReq, ORes]) (State[PReq, ORes], func() []StateEvent[ORes]) {
+	wrapper := &esState[PReq, ORes]{State: s}
+	return wrapper, func() []StateEvent[ORes] {
+		return wrapper.events
+	}
+}
+
+func Replay[PReq, ORes any](State State[PReq, ORes], trace []StateEvent[ORes]) {
+	for _, event := range trace {
+		switch event.Type {
+		case CallIssue:
+			_, _, _ = State.Issue()
+		case CallUpdate:
+			_, _ = State.Update(event.Payload)
+		}
+	}
+}
+
+type esState[PReq, ORes any] struct {
+	State[PReq, ORes]
+	events []StateEvent[ORes]
+}
+
+func (s *esState[PReq, ORes]) Update(res ORes) (done bool, err error) {
+	s.events = append(s.events, StateEvent[ORes]{Type: CallUpdate, Payload: res})
+	done, err = s.State.Update(res)
+	return done, err
+}
+
+func (s *esState[PReq, ORes]) Issue() (req PReq, ok bool, err error) {
+	s.events = append(s.events, StateEvent[ORes]{Type: CallIssue})
+	req, ok, err = s.State.Issue()
+	return req, ok, err
+}

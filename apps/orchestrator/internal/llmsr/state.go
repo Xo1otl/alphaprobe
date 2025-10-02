@@ -30,7 +30,6 @@ type DeterministicState struct {
 	InitialSkeleton       Skeleton
 	NumIslandsToEliminate int
 	ScoreQuantization     int
-	Trace                 []RecordedEvent
 	rng                   *rand.Rand
 }
 
@@ -71,16 +70,6 @@ func NewDeterministicState(initialSkeleton Skeleton, initialScore ProgramScore, 
 }
 
 func (s *DeterministicState) Update(res ObserveResult) (done bool, err error) {
-	s.Trace = append(s.Trace, RecordedEvent{Type: CallUpdate, ObserveResult: &res})
-	return s.update(res)
-}
-
-func (s *DeterministicState) Issue() (ProposeRequest, bool, error) {
-	s.Trace = append(s.Trace, RecordedEvent{Type: CallIssue})
-	return s.issue()
-}
-
-func (s *DeterministicState) update(res ObserveResult) (done bool, err error) {
 	if res.Err != nil {
 		return true, res.Err
 	}
@@ -105,7 +94,7 @@ func (s *DeterministicState) update(res ObserveResult) (done bool, err error) {
 	return s.EvaluationsCount >= s.MaxEvaluations, nil
 }
 
-func (s *DeterministicState) issue() (ProposeRequest, bool, error) {
+func (s *DeterministicState) Issue() (ProposeRequest, bool, error) {
 	islandIDs := make([]int, 0, len(s.Islands))
 	for id := range s.Islands {
 		islandIDs = append(islandIDs, id)

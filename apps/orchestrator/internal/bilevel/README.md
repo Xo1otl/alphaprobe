@@ -99,3 +99,24 @@ orchestrator := bilevel.NewOrchestrator(
 
 bilevel.RunWithAdapter(orchestrator, ctx, state, adapter, errCh)
 ```
+
+# Changelog: Added an eventsoucing feature
+### The Pattern
+
+* The wrapper stores a pointer to the original object.
+* The original variable and the wrapper's internal field reference the same object in memory.
+* Method calls on the wrapper are delegated to the original object, mutating its state.
+
+### The Workflow
+
+1.  Create and retain a variable referencing the original concrete object.
+2.  Pass this pointer to the wrapping function to get an interface.
+3.  Pass the returned interface to the framework for processing.
+4.  After processing, use the original variable, which retains its concrete type, for analysis. This removes the need for type assertions.
+
+### `context.Context`
+
+This pattern is used by `context.Context`.
+
+* Functions like `context.WithValue` return a new `context` struct that wraps the parent.
+* The new struct adds functionality (storing a value) and delegates other method calls to its parent.
