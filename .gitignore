@@ -15,6 +15,7 @@ __pycache__/
 .lake/
 __debug_bin*
 .gradio/
+.vscode/
 
 # sensitive files
 awsconfig.json

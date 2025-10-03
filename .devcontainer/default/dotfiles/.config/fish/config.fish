@@ -2,6 +2,7 @@ alias c="clear"
 alias e="exit"
 alias phs="python3 -m http.server"
 alias gemini="bunx @google/gemini-cli"
+alias vim="vim.tiny"
 
 fish_vi_key_bindings
 

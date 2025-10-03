@@ -12,8 +12,10 @@
 		"go.goroot": "${env:HOME}/.local/share/mise/installs/go/1.25.1",
 		/* julia */
 		"julia.NumThreads": "auto",
+		"julia.executablePath": "${env:HOME}/.local/share/mise/shims/julia",
 		/* python */
-		"python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
+		"python.terminal.activateEnvironment": false, // let mise activate venv
+		"python.terminal.activateEnvInCurrentTerminal": false,
 		"python.analysis.typeCheckingMode": "strict", // vscodeの設定
 		"cursorpyright.analysis.typeCheckingMode": "strict", // cursorの設定
 		"[python]": {

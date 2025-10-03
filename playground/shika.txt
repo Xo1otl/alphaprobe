@@ -1,1 +1,0 @@
-runner.pyとsummarizer.pyとnovelty_judge.pyとsampler.pyですべて理解できるらしい
