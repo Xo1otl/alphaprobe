@@ -35,13 +35,13 @@ class LLMSRStub(object):
         Args:
             channel: A grpc.Channel.
         """
-        self.Propose = channel.unary_unary(
-                '/llmsr_worker.pb.LLMSR/Propose',
+        self.propose = channel.unary_unary(
+                '/llmsr_worker.pb.LLMSR/propose',
                 request_serializer=llmsr__worker_dot_pb_dot_llmsr__pb2.ProposeRequest.SerializeToString,
                 response_deserializer=llmsr__worker_dot_pb_dot_llmsr__pb2.ProposeResponse.FromString,
                 _registered_method=True)
-        self.Observe = channel.unary_unary(
-                '/llmsr_worker.pb.LLMSR/Observe',
+        self.observe = channel.unary_unary(
+                '/llmsr_worker.pb.LLMSR/observe',
                 request_serializer=llmsr__worker_dot_pb_dot_llmsr__pb2.ObserveRequest.SerializeToString,
                 response_deserializer=llmsr__worker_dot_pb_dot_llmsr__pb2.ObserveResponse.FromString,
                 _registered_method=True)
@@ -52,14 +52,14 @@ class LLMSRServicer(object):
     """
 
     def propose(self, request, context):
-        """Propose generates new program skeletons based on parent programs.
+        """propose generates new program skeletons based on parent programs.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
     def observe(self, request, context):
-        """Observe evaluates a given program skeleton and returns its performance score.
+        """observe evaluates a given program skeleton and returns its performance score.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
@@ -68,13 +68,13 @@ class LLMSRServicer(object):
 
 def add_LLMSRServicer_to_server(servicer, server):
     rpc_method_handlers = {
-            'Propose': grpc.unary_unary_rpc_method_handler(
-                    servicer.Propose,
+            'propose': grpc.unary_unary_rpc_method_handler(
+                    servicer.propose,
                     request_deserializer=llmsr__worker_dot_pb_dot_llmsr__pb2.ProposeRequest.FromString,
                     response_serializer=llmsr__worker_dot_pb_dot_llmsr__pb2.ProposeResponse.SerializeToString,
             ),
-            'Observe': grpc.unary_unary_rpc_method_handler(
-                    servicer.Observe,
+            'observe': grpc.unary_unary_rpc_method_handler(
+                    servicer.observe,
                     request_deserializer=llmsr__worker_dot_pb_dot_llmsr__pb2.ObserveRequest.FromString,
                     response_serializer=llmsr__worker_dot_pb_dot_llmsr__pb2.ObserveResponse.SerializeToString,
             ),
@@ -91,7 +91,7 @@ class LLMSR(object):
     """
 
     @staticmethod
-    def Propose(request,
+    def propose(request,
             target,
             options=(),
             channel_credentials=None,
@@ -104,7 +104,7 @@ class LLMSR(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/llmsr_worker.pb.LLMSR/Propose',
+            '/llmsr_worker.pb.LLMSR/propose',
             llmsr__worker_dot_pb_dot_llmsr__pb2.ProposeRequest.SerializeToString,
             llmsr__worker_dot_pb_dot_llmsr__pb2.ProposeResponse.FromString,
             options,
@@ -118,7 +118,7 @@ class LLMSR(object):
             _registered_method=True)
 
     @staticmethod
-    def Observe(request,
+    def observe(request,
             target,
             options=(),
             channel_credentials=None,
@@ -131,7 +131,7 @@ class LLMSR(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/llmsr_worker.pb.LLMSR/Observe',
+            '/llmsr_worker.pb.LLMSR/observe',
             llmsr__worker_dot_pb_dot_llmsr__pb2.ObserveRequest.SerializeToString,
             llmsr__worker_dot_pb_dot_llmsr__pb2.ObserveResponse.FromString,
             options,

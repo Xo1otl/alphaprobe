@@ -73,7 +73,8 @@ func TestLLMSR_WithGRPCServer(t *testing.T) {
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx,
-		"/workspaces/alphaprobe/.venv/bin/python", "-u",
+		"/home/john/Repositories/alphaprobe/.venv/bin/python", "-u",
+		// "/workspaces/alphaprobe/.venv/bin/python", "-u",
 		"-c", "import llmsr_worker; llmsr_worker.main()",
 	)
 	stdout, err := cmd.StdoutPipe()

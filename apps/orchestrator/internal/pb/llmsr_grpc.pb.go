@@ -19,8 +19,8 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	LLMSR_Propose_FullMethodName = "/llmsr_worker.pb.LLMSR/Propose"
-	LLMSR_Observe_FullMethodName = "/llmsr_worker.pb.LLMSR/Observe"
+	LLMSR_Propose_FullMethodName = "/llmsr_worker.pb.LLMSR/propose"
+	LLMSR_Observe_FullMethodName = "/llmsr_worker.pb.LLMSR/observe"
 )
 
 // LLMSRClient is the client API for LLMSR service.
@@ -29,9 +29,9 @@ const (
 //
 // llmsr-worker service definition.
 type LLMSRClient interface {
-	// Propose generates new program skeletons based on parent programs.
+	// propose generates new program skeletons based on parent programs.
 	Propose(ctx context.Context, in *ProposeRequest, opts ...grpc.CallOption) (*ProposeResponse, error)
-	// Observe evaluates a given program skeleton and returns its performance score.
+	// observe evaluates a given program skeleton and returns its performance score.
 	Observe(ctx context.Context, in *ObserveRequest, opts ...grpc.CallOption) (*ObserveResponse, error)
 }
 
@@ -69,9 +69,9 @@ func (c *lLMSRClient) Observe(ctx context.Context, in *ObserveRequest, opts ...g
 //
 // llmsr-worker service definition.
 type LLMSRServer interface {
-	// Propose generates new program skeletons based on parent programs.
+	// propose generates new program skeletons based on parent programs.
 	Propose(context.Context, *ProposeRequest) (*ProposeResponse, error)
-	// Observe evaluates a given program skeleton and returns its performance score.
+	// observe evaluates a given program skeleton and returns its performance score.
 	Observe(context.Context, *ObserveRequest) (*ObserveResponse, error)
 	mustEmbedUnimplementedLLMSRServer()
 }
@@ -154,11 +154,11 @@ var LLMSR_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*LLMSRServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "Propose",
+			MethodName: "propose",
 			Handler:    _LLMSR_Propose_Handler,
 		},
 		{
-			MethodName: "Observe",
+			MethodName: "observe",
 			Handler:    _LLMSR_Observe_Handler,
 		},
 	},

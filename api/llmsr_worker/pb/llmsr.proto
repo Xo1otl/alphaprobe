@@ -6,11 +6,11 @@ option go_package = "alphaprobe/orchestrator/internal/pb;pb";
 
 // llmsr-worker service definition.
 service LLMSR {
-  // Propose generates new program skeletons based on parent programs.
-  rpc Propose(ProposeRequest) returns (ProposeResponse) {}
+  // propose generates new program skeletons based on parent programs.
+  rpc propose(ProposeRequest) returns (ProposeResponse) {}
 
-  // Observe evaluates a given program skeleton and returns its performance score.
-  rpc Observe(ObserveRequest) returns (ObserveResponse) {}
+  // observe evaluates a given program skeleton and returns its performance score.
+  rpc observe(ObserveRequest) returns (ObserveResponse) {}
 }
 
 // Represents a program with its skeleton and score, used as input for Propose.

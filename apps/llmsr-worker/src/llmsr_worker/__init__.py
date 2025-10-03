@@ -50,7 +50,7 @@ def main() -> None:
 
     server.add_insecure_port("[::]:50051")
     server.start()
-    logger.debug("llmsr worker gRPC server started on port 50051")
+    print("llmsr worker gRPC server started on port 50051")
     server.wait_for_termination()
 
 

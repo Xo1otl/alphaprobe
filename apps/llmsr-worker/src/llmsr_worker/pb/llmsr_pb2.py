@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1bllmsr_worker/pb/llmsr.proto\x12\x0fllmsr_worker.pb\"*\n\x07Program\x12\x10\n\x08skeleton\x18\x01 \x01(\t\x12\r\n\x05score\x18\x02 \x01(\x01\";\n\x0eProposeRequest\x12)\n\x07parents\x18\x01 \x03(\x0b\x32\x18.llmsr_worker.pb.Program\"$\n\x0fProposeResponse\x12\x11\n\tskeletons\x18\x01 \x03(\t\"\"\n\x0eObserveRequest\x12\x10\n\x08skeleton\x18\x01 \x01(\t\"2\n\x0fObserveResponse\x12\x10\n\x08skeleton\x18\x01 \x01(\t\x12\r\n\x05score\x18\x02 \x01(\x01\x32\xa7\x01\n\x05LLMSR\x12N\n\x07Propose\x12\x1f.llmsr_worker.pb.ProposeRequest\x1a .llmsr_worker.pb.ProposeResponse\"\x00\x12N\n\x07Observe\x12\x1f.llmsr_worker.pb.ObserveRequest\x1a .llmsr_worker.pb.ObserveResponse\"\x00\x42(Z&alphaprobe/orchestrator/internal/pb;pbb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1bllmsr_worker/pb/llmsr.proto\x12\x0fllmsr_worker.pb\"*\n\x07Program\x12\x10\n\x08skeleton\x18\x01 \x01(\t\x12\r\n\x05score\x18\x02 \x01(\x01\";\n\x0eProposeRequest\x12)\n\x07parents\x18\x01 \x03(\x0b\x32\x18.llmsr_worker.pb.Program\"$\n\x0fProposeResponse\x12\x11\n\tskeletons\x18\x01 \x03(\t\"\"\n\x0eObserveRequest\x12\x10\n\x08skeleton\x18\x01 \x01(\t\"2\n\x0fObserveResponse\x12\x10\n\x08skeleton\x18\x01 \x01(\t\x12\r\n\x05score\x18\x02 \x01(\x01\x32\xa7\x01\n\x05LLMSR\x12N\n\x07propose\x12\x1f.llmsr_worker.pb.ProposeRequest\x1a .llmsr_worker.pb.ProposeResponse\"\x00\x12N\n\x07observe\x12\x1f.llmsr_worker.pb.ObserveRequest\x1a .llmsr_worker.pb.ObserveResponse\"\x00\x42(Z&alphaprobe/orchestrator/internal/pb;pbb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)

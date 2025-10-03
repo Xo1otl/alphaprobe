@@ -281,8 +281,8 @@ const file_pb_llmsr_proto_rawDesc = "" +
 	"\bskeleton\x18\x01 \x01(\tR\bskeleton\x12\x14\n" +
 	"\x05score\x18\x02 \x01(\x01R\x05score2\xa7\x01\n" +
 	"\x05LLMSR\x12N\n" +
-	"\aPropose\x12\x1f.llmsr_worker.pb.ProposeRequest\x1a .llmsr_worker.pb.ProposeResponse\"\x00\x12N\n" +
-	"\aObserve\x12\x1f.llmsr_worker.pb.ObserveRequest\x1a .llmsr_worker.pb.ObserveResponse\"\x00B(Z&alphaprobe/orchestrator/internal/pb;pbb\x06proto3"
+	"\apropose\x12\x1f.llmsr_worker.pb.ProposeRequest\x1a .llmsr_worker.pb.ProposeResponse\"\x00\x12N\n" +
+	"\aobserve\x12\x1f.llmsr_worker.pb.ObserveRequest\x1a .llmsr_worker.pb.ObserveResponse\"\x00B(Z&alphaprobe/orchestrator/internal/pb;pbb\x06proto3"
 
 var (
 	file_pb_llmsr_proto_rawDescOnce sync.Once
@@ -306,10 +306,10 @@ var file_pb_llmsr_proto_goTypes = []any{
 }
 var file_pb_llmsr_proto_depIdxs = []int32{
 	0, // 0: llmsr_worker.pb.ProposeRequest.parents:type_name -> llmsr_worker.pb.Program
-	1, // 1: llmsr_worker.pb.LLMSR.Propose:input_type -> llmsr_worker.pb.ProposeRequest
-	3, // 2: llmsr_worker.pb.LLMSR.Observe:input_type -> llmsr_worker.pb.ObserveRequest
-	2, // 3: llmsr_worker.pb.LLMSR.Propose:output_type -> llmsr_worker.pb.ProposeResponse
-	4, // 4: llmsr_worker.pb.LLMSR.Observe:output_type -> llmsr_worker.pb.ObserveResponse
+	1, // 1: llmsr_worker.pb.LLMSR.propose:input_type -> llmsr_worker.pb.ProposeRequest
+	3, // 2: llmsr_worker.pb.LLMSR.observe:input_type -> llmsr_worker.pb.ObserveRequest
+	2, // 3: llmsr_worker.pb.LLMSR.propose:output_type -> llmsr_worker.pb.ProposeResponse
+	4, // 4: llmsr_worker.pb.LLMSR.observe:output_type -> llmsr_worker.pb.ObserveResponse
 	3, // [3:5] is the sub-list for method output_type
 	1, // [1:3] is the sub-list for method input_type
 	1, // [1:1] is the sub-list for extension type_name
