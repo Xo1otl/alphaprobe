@@ -8,18 +8,20 @@
 	"extensions": { "recommendations": ["vscodevim.vim"] },
 	"settings": {
 		// プログラミング言語
+		/* go */
+		"go.goroot": "${env:HOME}/.local/share/mise/installs/go/1.25.1",
 		/* julia */
 		"julia.NumThreads": "auto",
 		/* python */
 		"python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
-		"python.analysis.typeCheckingMode": "strict",
+		"python.analysis.typeCheckingMode": "strict", // vscodeの設定
+		"cursorpyright.analysis.typeCheckingMode": "strict", // cursorの設定
 		"[python]": {
 			"editor.defaultFormatter": "charliermarsh.ruff"
 		},
 		"notebook.formatOnSave.enabled": true,
 		/* js/ts */
-		"bun.runtime": "/home/vscode/.local/share/mise/shims/bun",
-		// "bun.debugTerminal.stopOnEntry": false,
+		"bun.runtime": "${env:HOME}/.local/share/mise/shims/bun",
 		"typescript.updateImportsOnFileMove.enabled": "always",
 		"[typescript]": {
 			"editor.defaultFormatter": "biomejs.biome"

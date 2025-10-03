@@ -9,6 +9,7 @@ vendor/
 dist/
 out/
 __pycache__/
+.pytest_cache/
 
 # ide and development tools
 .lake/
