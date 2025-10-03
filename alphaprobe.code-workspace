@@ -11,13 +11,10 @@
 		/* julia */
 		"julia.NumThreads": "auto",
 		/* python */
-		"python.defaultInterpreterPath": "/workspaces/alphaprobe/.venv/bin/python",
+		"python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
 		"python.analysis.typeCheckingMode": "strict",
-		"pylint.args": [
-			"--disable=C0111" // docstringがなくてもいちいち警告ださない
-		],
 		"[python]": {
-			"editor.defaultFormatter": "ms-python.black-formatter"
+			"editor.defaultFormatter": "charliermarsh.ruff"
 		},
 		"notebook.formatOnSave.enabled": true,
 		/* js/ts */

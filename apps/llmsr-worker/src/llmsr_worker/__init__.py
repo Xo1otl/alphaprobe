@@ -1,20 +1,23 @@
+import logging
 from concurrent import futures
-from typing import Any
+from typing import Never
+
 import grpc
 from grpc_reflection.v1alpha import reflection
-from . import pb
-from . import observe
-from . import propose
+
+from . import observe, pb, propose
+
+logger = logging.getLogger(__name__)
 
 
 class LLMSRServicer(pb.LLMSRServicer):
-    def Propose(self, request: pb.ProposeRequest, context: Any) -> pb.ProposeResponse:
+    def propose(self, request: pb.ProposeRequest, context: Never) -> pb.ProposeResponse:
         try:
             req = propose.Request(
                 parents=[
                     propose.Program(skeleton=p.skeleton, score=p.score)
                     for p in request.parents
-                ]
+                ],
             )
             res = propose.handle(req)
             return pb.ProposeResponse(skeletons=res.skeletons)
@@ -24,7 +27,7 @@ class LLMSRServicer(pb.LLMSRServicer):
             context.set_details(str(e))
             return pb.ProposeResponse()
 
-    def Observe(self, request: pb.ObserveRequest, context: Any) -> pb.ObserveResponse:
+    def observe(self, request: pb.ObserveRequest, context: Never) -> pb.ObserveResponse:
         try:
             req = observe.Request(skeleton=request.skeleton)
             res = observe.handle(req)
@@ -35,9 +38,9 @@ class LLMSRServicer(pb.LLMSRServicer):
             return pb.ObserveResponse()
 
 
-def main():
+def main() -> None:
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=None))
-    pb.add_LLMSRServicer_to_server(LLMSRServicer(), server)  # type: ignore
+    pb.add_LLMSRServicer_to_server(LLMSRServicer(), server)  # pyright: ignore[reportUnknownMemberType]
 
     service_names = (
         pb.DESCRIPTOR.services_by_name["LLMSR"].full_name,
@@ -47,7 +50,7 @@ def main():
 
     server.add_insecure_port("[::]:50051")
     server.start()
-    print("llmsr worker gRPC server started on port 50051")
+    logger.debug("llmsr worker gRPC server started on port 50051")
     server.wait_for_termination()
 
 

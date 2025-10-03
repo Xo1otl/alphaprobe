@@ -51,14 +51,14 @@ class LLMSRServicer(object):
     """llmsr-worker service definition.
     """
 
-    def Propose(self, request, context):
+    def propose(self, request, context):
         """Propose generates new program skeletons based on parent programs.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def Observe(self, request, context):
+    def observe(self, request, context):
         """Observe evaluates a given program skeleton and returns its performance score.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)

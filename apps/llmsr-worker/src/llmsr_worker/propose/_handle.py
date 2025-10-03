@@ -3,7 +3,8 @@ from ._types import Request, Response
 
 def handle(request: Request) -> Response:
     if not request.parents:
-        raise ValueError("No parents provided")
+        msg = "No parents provided"
+        raise ValueError(msg)
 
     best_parent = max(request.parents, key=lambda p: p.score)
     parent_skeleton = best_parent.skeleton

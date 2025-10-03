@@ -32,12 +32,13 @@ members = ["artifacts/funsearch", "apps/llmsr-worker"]
 funsearch = { workspace = true }
 llmsr-worker = { workspace = true }
 
-[tool.pyright]
+[tool.ruff]
 include = ["scripts", "artifacts/funsearch", "apps/llmsr-worker"]
 exclude = ["**/pb"]
-typeCheckingMode = "strict"
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = ["D"]
 
 [dependency-groups]
-dev = [
-    "grpcio-tools>=1.75.1",
-]
+dev = ["grpcio-tools>=1.75.1"]
