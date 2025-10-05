@@ -8,6 +8,7 @@ from grpc_reflection.v1alpha import reflection
 from . import observe, pb, propose
 
 logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO)
 
 
 class LLMSRServicer(pb.LLMSRServicer):
@@ -50,7 +51,7 @@ def main() -> None:
 
     server.add_insecure_port("[::]:50051")
     server.start()
-    print("llmsr worker gRPC server started on port 50051")
+    logger.info("llmsr worker gRPC server started on port 50051")
     server.wait_for_termination()
 
 
