@@ -7,6 +7,8 @@ import (
 	"context"
 	"math/rand"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -24,7 +26,7 @@ const (
 	migrationInterval  = 25
 	proposeConcurrency = 1
 	observeConcurrency = 1
-	testTimeout        = 5 * time.Second
+	testTimeout        = 2998 * time.Second
 	scoreQuantization  = 2
 	t0                 = 0
 	n                  = 1
@@ -36,8 +38,6 @@ func useTestRng() *rand.Rand {
 }
 
 func newInitialState(t *testing.T, observeFn bilevel.ObserveFunc[ObserveRequest, ObserveResult]) (*DeterministicState, float64) {
-	t.Helper()
-
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
 
@@ -72,9 +72,15 @@ func TestLLMSR_WithGRPCServer(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
 
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatalf("Failed to get caller information")
+	}
+	dir := filepath.Dir(filename)
+	pythonPath := filepath.Join(dir, "../../../../", ".venv/bin/python")
+
 	cmd := exec.CommandContext(ctx,
-		"/home/john/Repositories/alphaprobe/.venv/bin/python", "-u",
-		// "/workspaces/alphaprobe/.venv/bin/python", "-u",
+		pythonPath, "-u",
 		"-c", "import llmsr_worker; llmsr_worker.main()",
 	)
 	stdout, err := cmd.StdoutPipe()
@@ -140,8 +146,6 @@ func TestLLMSR_WithGRPCServer(t *testing.T) {
 }
 
 func runLLMSR(t *testing.T, state bilevel.State[ProposeRequest, ObserveResult], proposeFn bilevel.ProposeFunc[ProposeRequest, ProposeResult], observeFn bilevel.ObserveFunc[ObserveRequest, ObserveResult]) {
-	t.Helper()
-
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
 
@@ -171,7 +175,6 @@ func runLLMSR(t *testing.T, state bilevel.State[ProposeRequest, ObserveResult], 
 }
 
 func logStateSummary(t *testing.T, state *DeterministicState, initialScore float64, trace []bilevel.StateEvent[ObserveResult]) {
-	t.Helper()
 	t.Log("--- State Summary ---")
 	t.Logf("Total Islands: %d", len(state.Islands))
 

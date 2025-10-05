@@ -7,7 +7,7 @@ import (
 	"alphaprobe/orchestrator/internal/pb"
 )
 
-// NewGRPCPropose creates a new Propose function that communicates over gRPC.
+// TODO: skeletonを送ってるだけだが、シグネチャも必要なのか？それともdraftという名前で変更適用対象としてのoriginalを含めるか。
 func NewGRPCPropose(client pb.LLMSRClient) func(context.Context, ProposeRequest) ProposeResult {
 	return func(ctx context.Context, req ProposeRequest) ProposeResult {
 		pbParents := make([]*pb.Program, len(req.Parents))
@@ -33,7 +33,6 @@ func NewGRPCPropose(client pb.LLMSRClient) func(context.Context, ProposeRequest)
 	}
 }
 
-// NewGRPCObserve creates a new Observe function that communicates over gRPC.
 func NewGRPCObserve(client pb.LLMSRClient) func(context.Context, ObserveRequest) ObserveResult {
 	return func(ctx context.Context, req ObserveRequest) ObserveResult {
 		if req.Err != nil {
