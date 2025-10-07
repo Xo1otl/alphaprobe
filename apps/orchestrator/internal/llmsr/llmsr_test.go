@@ -26,7 +26,7 @@ const (
 	migrationInterval  = 25
 	proposeConcurrency = 1
 	observeConcurrency = 1
-	testTimeout        = 2998 * time.Second
+	testTimeout        = 6 * time.Second
 	scoreQuantization  = 2
 	t0                 = 0
 	n                  = 1

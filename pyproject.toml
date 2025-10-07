@@ -8,15 +8,14 @@ dependencies = [
     # scriptsで必要なpackage
     "nbconvert",
     "playwright",
-
     # Jupyterで使用するpackage
     "notebook",
     "matplotlib",
     "japanize_matplotlib",
-
     # workspace packages
     "funsearch",
     "llmsr-worker",
+    "tmmax",
 ]
 
 [project.optional-dependencies]
