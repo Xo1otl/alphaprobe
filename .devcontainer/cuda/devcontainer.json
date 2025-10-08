@@ -13,14 +13,13 @@
 			"extensions": [
 				// programming languages
 				"golang.go",
-				// pythonは言語 + linter + formatter
+				// python: lanugage server + linter/formatter
 				"ms-python.python",
-				"ms-python.black-formatter",
-				"ms-python.pylint",
-				// js/tsは言語 + linter/formatter
+				"charliermarsh.ruff",
+				// js/ts: language server + linter/formatter
 				"oven.bun-vscode",
 				"biomejs.biome",
-				// juliaはjitなのでpythonより速い
+				// julia
 				"julialang.language-julia",
 
 				// other markup languages
