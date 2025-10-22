@@ -1,0 +1,41 @@
+# dependencies
+node_modules/
+.venv/
+.juliaup/
+bun.lockb
+vendor/
+
+# build outputs
+dist/
+out/
+__pycache__/
+.pytest_cache/
+*.egg-info/
+
+# ide and development tools
+.lake/
+__debug_bin*
+.gradio/
+.vscode/
+
+# sensitive files
+awsconfig.json
+.env
+id_ed25519_*
+credentials
+*credentials.json
+*.tfvars
+*.tar.gz
+.secrets
+backup/
+.ssh/
+tfplan
+*.tfstate
+*.tfstate.backup
+cloudflared-token
+
+# other
+*.docx
+.initialized
+GEMINI.md
+.terraform/
