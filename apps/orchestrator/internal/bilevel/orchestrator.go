@@ -3,7 +3,7 @@ package bilevel
 import (
 	"context"
 
-	"funsearch-orchestrator/internal/pipeline"
+	"orchestrator/internal/pipeline"
 )
 
 // --- Public API ---

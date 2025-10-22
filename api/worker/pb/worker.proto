@@ -1,11 +1,11 @@
 syntax = "proto3";
 
-package funsearch_worker.pb;
+package worker.pb;
 
-option go_package = "funsearch-orchestrator/internal/pb;pb";
+option go_package = "orchestrator/internal/pb;pb";
 
-// funsearch-worker service definition.
-service FUNSEARCH {
+// worker service definition.
+service WORKER {
   // propose generates new candidate hypothesises based on parent candidates.
   rpc propose(ProposeRequest) returns (ProposeResponse) {}
 

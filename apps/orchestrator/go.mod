@@ -1,4 +1,4 @@
-module funsearch-orchestrator
+module orchestrator
 
 go 1.25.3
 

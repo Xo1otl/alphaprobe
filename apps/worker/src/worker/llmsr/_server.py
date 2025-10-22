@@ -3,7 +3,7 @@ from typing import Never
 
 import grpc
 
-from funsearch_worker import pb, propose
+from worker import pb, propose
 
 from ._handle import ObserveRequest, handle_observe
 from ._llm import LLM
@@ -11,7 +11,7 @@ from ._prompt_template import Program, PromptTemplate
 
 
 @dataclass
-class GRPCServicer(pb.FUNSEARCHServicer):
+class GRPCServicer(pb.WORKERServicer):
     handle_propose: propose.HandlerFunc[Program]
 
     def propose(self, request: pb.ProposeRequest, context: Never) -> pb.ProposeResponse:

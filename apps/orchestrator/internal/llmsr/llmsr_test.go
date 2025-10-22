@@ -3,10 +3,10 @@ package llmsr_test
 import (
 	"bufio"
 	"context"
-	"funsearch-orchestrator/internal/bilevel"
-	"funsearch-orchestrator/internal/llmsr"
-	"funsearch-orchestrator/internal/pb"
 	"math/rand"
+	"orchestrator/internal/bilevel"
+	"orchestrator/internal/llmsr"
+	"orchestrator/internal/pb"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -82,7 +82,7 @@ func TestLLMSR_WithGRPCServer(t *testing.T) {
 
 	cmd := exec.CommandContext(ctx,
 		pythonPath, "-u",
-		"-c", "import funsearch_worker; funsearch_worker.main()",
+		"-c", "import worker; worker.main()",
 	)
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -125,7 +125,7 @@ func TestLLMSR_WithGRPCServer(t *testing.T) {
 	}
 	defer conn.Close()
 
-	client := pb.NewFUNSEARCHClient(conn)
+	client := pb.NewWORKERClient(conn)
 	proposeFn := llmsr.NewGRPCPropose(client)
 	observeFn := llmsr.NewGRPCObserve(client)
 

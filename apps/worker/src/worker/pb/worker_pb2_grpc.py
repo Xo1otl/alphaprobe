@@ -3,7 +3,7 @@
 import grpc
 import warnings
 
-from funsearch_worker.pb import funsearch_pb2 as funsearch__worker_dot_pb_dot_funsearch__pb2
+from worker.pb import worker_pb2 as worker_dot_pb_dot_worker__pb2
 
 GRPC_GENERATED_VERSION = '1.75.1'
 GRPC_VERSION = grpc.__version__
@@ -18,15 +18,15 @@ except ImportError:
 if _version_not_supported:
     raise RuntimeError(
         f'The grpc package installed is at version {GRPC_VERSION},'
-        + f' but the generated code in funsearch_worker/pb/funsearch_pb2_grpc.py depends on'
+        + f' but the generated code in worker/pb/worker_pb2_grpc.py depends on'
         + f' grpcio>={GRPC_GENERATED_VERSION}.'
         + f' Please upgrade your grpc module to grpcio>={GRPC_GENERATED_VERSION}'
         + f' or downgrade your generated code using grpcio-tools<={GRPC_VERSION}.'
     )
 
 
-class FUNSEARCHStub(object):
-    """funsearch-worker service definition.
+class WORKERStub(object):
+    """worker service definition.
     """
 
     def __init__(self, channel):
@@ -36,19 +36,19 @@ class FUNSEARCHStub(object):
             channel: A grpc.Channel.
         """
         self.propose = channel.unary_unary(
-                '/funsearch_worker.pb.FUNSEARCH/propose',
-                request_serializer=funsearch__worker_dot_pb_dot_funsearch__pb2.ProposeRequest.SerializeToString,
-                response_deserializer=funsearch__worker_dot_pb_dot_funsearch__pb2.ProposeResponse.FromString,
+                '/worker.pb.WORKER/propose',
+                request_serializer=worker_dot_pb_dot_worker__pb2.ProposeRequest.SerializeToString,
+                response_deserializer=worker_dot_pb_dot_worker__pb2.ProposeResponse.FromString,
                 _registered_method=True)
         self.observe = channel.unary_unary(
-                '/funsearch_worker.pb.FUNSEARCH/observe',
-                request_serializer=funsearch__worker_dot_pb_dot_funsearch__pb2.ObserveRequest.SerializeToString,
-                response_deserializer=funsearch__worker_dot_pb_dot_funsearch__pb2.ObserveResponse.FromString,
+                '/worker.pb.WORKER/observe',
+                request_serializer=worker_dot_pb_dot_worker__pb2.ObserveRequest.SerializeToString,
+                response_deserializer=worker_dot_pb_dot_worker__pb2.ObserveResponse.FromString,
                 _registered_method=True)
 
 
-class FUNSEARCHServicer(object):
-    """funsearch-worker service definition.
+class WORKERServicer(object):
+    """worker service definition.
     """
 
     def propose(self, request, context):
@@ -66,28 +66,28 @@ class FUNSEARCHServicer(object):
         raise NotImplementedError('Method not implemented!')
 
 
-def add_FUNSEARCHServicer_to_server(servicer, server):
+def add_WORKERServicer_to_server(servicer, server):
     rpc_method_handlers = {
             'propose': grpc.unary_unary_rpc_method_handler(
                     servicer.propose,
-                    request_deserializer=funsearch__worker_dot_pb_dot_funsearch__pb2.ProposeRequest.FromString,
-                    response_serializer=funsearch__worker_dot_pb_dot_funsearch__pb2.ProposeResponse.SerializeToString,
+                    request_deserializer=worker_dot_pb_dot_worker__pb2.ProposeRequest.FromString,
+                    response_serializer=worker_dot_pb_dot_worker__pb2.ProposeResponse.SerializeToString,
             ),
             'observe': grpc.unary_unary_rpc_method_handler(
                     servicer.observe,
-                    request_deserializer=funsearch__worker_dot_pb_dot_funsearch__pb2.ObserveRequest.FromString,
-                    response_serializer=funsearch__worker_dot_pb_dot_funsearch__pb2.ObserveResponse.SerializeToString,
+                    request_deserializer=worker_dot_pb_dot_worker__pb2.ObserveRequest.FromString,
+                    response_serializer=worker_dot_pb_dot_worker__pb2.ObserveResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            'funsearch_worker.pb.FUNSEARCH', rpc_method_handlers)
+            'worker.pb.WORKER', rpc_method_handlers)
     server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers('funsearch_worker.pb.FUNSEARCH', rpc_method_handlers)
+    server.add_registered_method_handlers('worker.pb.WORKER', rpc_method_handlers)
 
 
  # This class is part of an EXPERIMENTAL API.
-class FUNSEARCH(object):
-    """funsearch-worker service definition.
+class WORKER(object):
+    """worker service definition.
     """
 
     @staticmethod
@@ -104,9 +104,9 @@ class FUNSEARCH(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/funsearch_worker.pb.FUNSEARCH/propose',
-            funsearch__worker_dot_pb_dot_funsearch__pb2.ProposeRequest.SerializeToString,
-            funsearch__worker_dot_pb_dot_funsearch__pb2.ProposeResponse.FromString,
+            '/worker.pb.WORKER/propose',
+            worker_dot_pb_dot_worker__pb2.ProposeRequest.SerializeToString,
+            worker_dot_pb_dot_worker__pb2.ProposeResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -131,9 +131,9 @@ class FUNSEARCH(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/funsearch_worker.pb.FUNSEARCH/observe',
-            funsearch__worker_dot_pb_dot_funsearch__pb2.ObserveRequest.SerializeToString,
-            funsearch__worker_dot_pb_dot_funsearch__pb2.ObserveResponse.FromString,
+            '/worker.pb.WORKER/observe',
+            worker_dot_pb_dot_worker__pb2.ObserveRequest.SerializeToString,
+            worker_dot_pb_dot_worker__pb2.ObserveResponse.FromString,
             options,
             channel_credentials,
             insecure,

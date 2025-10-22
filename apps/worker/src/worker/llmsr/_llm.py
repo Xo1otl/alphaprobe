@@ -1,4 +1,4 @@
-from funsearch_worker import propose
+from worker import propose
 
 
 class LLM(propose.LLM):

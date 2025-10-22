@@ -2,7 +2,7 @@
 // versions:
 // - protoc-gen-go-grpc v1.5.1
 // - protoc             v6.33.0
-// source: pb/funsearch.proto
+// source: pb/worker.proto
 
 package pb
 
@@ -19,149 +19,149 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	FUNSEARCH_Propose_FullMethodName = "/funsearch_worker.pb.FUNSEARCH/propose"
-	FUNSEARCH_Observe_FullMethodName = "/funsearch_worker.pb.FUNSEARCH/observe"
+	WORKER_Propose_FullMethodName = "/worker.pb.WORKER/propose"
+	WORKER_Observe_FullMethodName = "/worker.pb.WORKER/observe"
 )
 
-// FUNSEARCHClient is the client API for FUNSEARCH service.
+// WORKERClient is the client API for WORKER service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
-// funsearch-worker service definition.
-type FUNSEARCHClient interface {
+// worker service definition.
+type WORKERClient interface {
 	// propose generates new candidate hypothesises based on parent candidates.
 	Propose(ctx context.Context, in *ProposeRequest, opts ...grpc.CallOption) (*ProposeResponse, error)
 	// observe evaluates a given candidate hypothesis and returns its performance quantitative.
 	Observe(ctx context.Context, in *ObserveRequest, opts ...grpc.CallOption) (*ObserveResponse, error)
 }
 
-type fUNSEARCHClient struct {
+type wORKERClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewFUNSEARCHClient(cc grpc.ClientConnInterface) FUNSEARCHClient {
-	return &fUNSEARCHClient{cc}
+func NewWORKERClient(cc grpc.ClientConnInterface) WORKERClient {
+	return &wORKERClient{cc}
 }
 
-func (c *fUNSEARCHClient) Propose(ctx context.Context, in *ProposeRequest, opts ...grpc.CallOption) (*ProposeResponse, error) {
+func (c *wORKERClient) Propose(ctx context.Context, in *ProposeRequest, opts ...grpc.CallOption) (*ProposeResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ProposeResponse)
-	err := c.cc.Invoke(ctx, FUNSEARCH_Propose_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, WORKER_Propose_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *fUNSEARCHClient) Observe(ctx context.Context, in *ObserveRequest, opts ...grpc.CallOption) (*ObserveResponse, error) {
+func (c *wORKERClient) Observe(ctx context.Context, in *ObserveRequest, opts ...grpc.CallOption) (*ObserveResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ObserveResponse)
-	err := c.cc.Invoke(ctx, FUNSEARCH_Observe_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, WORKER_Observe_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// FUNSEARCHServer is the server API for FUNSEARCH service.
-// All implementations must embed UnimplementedFUNSEARCHServer
+// WORKERServer is the server API for WORKER service.
+// All implementations must embed UnimplementedWORKERServer
 // for forward compatibility.
 //
-// funsearch-worker service definition.
-type FUNSEARCHServer interface {
+// worker service definition.
+type WORKERServer interface {
 	// propose generates new candidate hypothesises based on parent candidates.
 	Propose(context.Context, *ProposeRequest) (*ProposeResponse, error)
 	// observe evaluates a given candidate hypothesis and returns its performance quantitative.
 	Observe(context.Context, *ObserveRequest) (*ObserveResponse, error)
-	mustEmbedUnimplementedFUNSEARCHServer()
+	mustEmbedUnimplementedWORKERServer()
 }
 
-// UnimplementedFUNSEARCHServer must be embedded to have
+// UnimplementedWORKERServer must be embedded to have
 // forward compatible implementations.
 //
 // NOTE: this should be embedded by value instead of pointer to avoid a nil
 // pointer dereference when methods are called.
-type UnimplementedFUNSEARCHServer struct{}
+type UnimplementedWORKERServer struct{}
 
-func (UnimplementedFUNSEARCHServer) Propose(context.Context, *ProposeRequest) (*ProposeResponse, error) {
+func (UnimplementedWORKERServer) Propose(context.Context, *ProposeRequest) (*ProposeResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Propose not implemented")
 }
-func (UnimplementedFUNSEARCHServer) Observe(context.Context, *ObserveRequest) (*ObserveResponse, error) {
+func (UnimplementedWORKERServer) Observe(context.Context, *ObserveRequest) (*ObserveResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Observe not implemented")
 }
-func (UnimplementedFUNSEARCHServer) mustEmbedUnimplementedFUNSEARCHServer() {}
-func (UnimplementedFUNSEARCHServer) testEmbeddedByValue()                   {}
+func (UnimplementedWORKERServer) mustEmbedUnimplementedWORKERServer() {}
+func (UnimplementedWORKERServer) testEmbeddedByValue()                {}
 
-// UnsafeFUNSEARCHServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to FUNSEARCHServer will
+// UnsafeWORKERServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to WORKERServer will
 // result in compilation errors.
-type UnsafeFUNSEARCHServer interface {
-	mustEmbedUnimplementedFUNSEARCHServer()
+type UnsafeWORKERServer interface {
+	mustEmbedUnimplementedWORKERServer()
 }
 
-func RegisterFUNSEARCHServer(s grpc.ServiceRegistrar, srv FUNSEARCHServer) {
-	// If the following call pancis, it indicates UnimplementedFUNSEARCHServer was
+func RegisterWORKERServer(s grpc.ServiceRegistrar, srv WORKERServer) {
+	// If the following call pancis, it indicates UnimplementedWORKERServer was
 	// embedded by pointer and is nil.  This will cause panics if an
 	// unimplemented method is ever invoked, so we test this at initialization
 	// time to prevent it from happening at runtime later due to I/O.
 	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
 		t.testEmbeddedByValue()
 	}
-	s.RegisterService(&FUNSEARCH_ServiceDesc, srv)
+	s.RegisterService(&WORKER_ServiceDesc, srv)
 }
 
-func _FUNSEARCH_Propose_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _WORKER_Propose_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ProposeRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(FUNSEARCHServer).Propose(ctx, in)
+		return srv.(WORKERServer).Propose(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: FUNSEARCH_Propose_FullMethodName,
+		FullMethod: WORKER_Propose_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(FUNSEARCHServer).Propose(ctx, req.(*ProposeRequest))
+		return srv.(WORKERServer).Propose(ctx, req.(*ProposeRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _FUNSEARCH_Observe_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _WORKER_Observe_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ObserveRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(FUNSEARCHServer).Observe(ctx, in)
+		return srv.(WORKERServer).Observe(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: FUNSEARCH_Observe_FullMethodName,
+		FullMethod: WORKER_Observe_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(FUNSEARCHServer).Observe(ctx, req.(*ObserveRequest))
+		return srv.(WORKERServer).Observe(ctx, req.(*ObserveRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-// FUNSEARCH_ServiceDesc is the grpc.ServiceDesc for FUNSEARCH service.
+// WORKER_ServiceDesc is the grpc.ServiceDesc for WORKER service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var FUNSEARCH_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "funsearch_worker.pb.FUNSEARCH",
-	HandlerType: (*FUNSEARCHServer)(nil),
+var WORKER_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "worker.pb.WORKER",
+	HandlerType: (*WORKERServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
 			MethodName: "propose",
-			Handler:    _FUNSEARCH_Propose_Handler,
+			Handler:    _WORKER_Propose_Handler,
 		},
 		{
 			MethodName: "observe",
-			Handler:    _FUNSEARCH_Observe_Handler,
+			Handler:    _WORKER_Observe_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "pb/funsearch.proto",
+	Metadata: "pb/worker.proto",
 }

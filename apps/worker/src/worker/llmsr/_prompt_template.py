@@ -1,7 +1,7 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from funsearch_worker import propose
+from worker import propose
 
 
 @dataclass(frozen=True)

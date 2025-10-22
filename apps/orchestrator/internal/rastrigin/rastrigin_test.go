@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"funsearch-orchestrator/internal/bilevel"
-	"funsearch-orchestrator/internal/rastrigin"
+	"orchestrator/internal/bilevel"
+	"orchestrator/internal/rastrigin"
 
 	"github.com/stretchr/testify/assert"
 )

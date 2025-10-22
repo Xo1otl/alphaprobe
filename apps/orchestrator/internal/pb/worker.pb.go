@@ -2,7 +2,7 @@
 // versions:
 // 	protoc-gen-go v1.36.10
 // 	protoc        v6.33.0
-// source: pb/funsearch.proto
+// source: pb/worker.proto
 
 package pb
 
@@ -33,7 +33,7 @@ type Candidate struct {
 
 func (x *Candidate) Reset() {
 	*x = Candidate{}
-	mi := &file_pb_funsearch_proto_msgTypes[0]
+	mi := &file_pb_worker_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -45,7 +45,7 @@ func (x *Candidate) String() string {
 func (*Candidate) ProtoMessage() {}
 
 func (x *Candidate) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_funsearch_proto_msgTypes[0]
+	mi := &file_pb_worker_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -58,7 +58,7 @@ func (x *Candidate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Candidate.ProtoReflect.Descriptor instead.
 func (*Candidate) Descriptor() ([]byte, []int) {
-	return file_pb_funsearch_proto_rawDescGZIP(), []int{0}
+	return file_pb_worker_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *Candidate) GetHypothesis() string {
@@ -93,7 +93,7 @@ type ProposeRequest struct {
 
 func (x *ProposeRequest) Reset() {
 	*x = ProposeRequest{}
-	mi := &file_pb_funsearch_proto_msgTypes[1]
+	mi := &file_pb_worker_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -105,7 +105,7 @@ func (x *ProposeRequest) String() string {
 func (*ProposeRequest) ProtoMessage() {}
 
 func (x *ProposeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_funsearch_proto_msgTypes[1]
+	mi := &file_pb_worker_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -118,7 +118,7 @@ func (x *ProposeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProposeRequest.ProtoReflect.Descriptor instead.
 func (*ProposeRequest) Descriptor() ([]byte, []int) {
-	return file_pb_funsearch_proto_rawDescGZIP(), []int{1}
+	return file_pb_worker_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *ProposeRequest) GetParents() []*Candidate {
@@ -145,7 +145,7 @@ type ProposeResponse struct {
 
 func (x *ProposeResponse) Reset() {
 	*x = ProposeResponse{}
-	mi := &file_pb_funsearch_proto_msgTypes[2]
+	mi := &file_pb_worker_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -157,7 +157,7 @@ func (x *ProposeResponse) String() string {
 func (*ProposeResponse) ProtoMessage() {}
 
 func (x *ProposeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_funsearch_proto_msgTypes[2]
+	mi := &file_pb_worker_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -170,7 +170,7 @@ func (x *ProposeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProposeResponse.ProtoReflect.Descriptor instead.
 func (*ProposeResponse) Descriptor() ([]byte, []int) {
-	return file_pb_funsearch_proto_rawDescGZIP(), []int{2}
+	return file_pb_worker_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *ProposeResponse) GetHypothesises() []string {
@@ -190,7 +190,7 @@ type ObserveRequest struct {
 
 func (x *ObserveRequest) Reset() {
 	*x = ObserveRequest{}
-	mi := &file_pb_funsearch_proto_msgTypes[3]
+	mi := &file_pb_worker_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -202,7 +202,7 @@ func (x *ObserveRequest) String() string {
 func (*ObserveRequest) ProtoMessage() {}
 
 func (x *ObserveRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_funsearch_proto_msgTypes[3]
+	mi := &file_pb_worker_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -215,7 +215,7 @@ func (x *ObserveRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ObserveRequest.ProtoReflect.Descriptor instead.
 func (*ObserveRequest) Descriptor() ([]byte, []int) {
-	return file_pb_funsearch_proto_rawDescGZIP(), []int{3}
+	return file_pb_worker_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *ObserveRequest) GetHypothesis() string {
@@ -238,7 +238,7 @@ type ObserveResponse struct {
 
 func (x *ObserveResponse) Reset() {
 	*x = ObserveResponse{}
-	mi := &file_pb_funsearch_proto_msgTypes[4]
+	mi := &file_pb_worker_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -250,7 +250,7 @@ func (x *ObserveResponse) String() string {
 func (*ObserveResponse) ProtoMessage() {}
 
 func (x *ObserveResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_funsearch_proto_msgTypes[4]
+	mi := &file_pb_worker_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -263,7 +263,7 @@ func (x *ObserveResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ObserveResponse.ProtoReflect.Descriptor instead.
 func (*ObserveResponse) Descriptor() ([]byte, []int) {
-	return file_pb_funsearch_proto_rawDescGZIP(), []int{4}
+	return file_pb_worker_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *ObserveResponse) GetHypothesis() string {
@@ -287,19 +287,19 @@ func (x *ObserveResponse) GetQualitative() string {
 	return ""
 }
 
-var File_pb_funsearch_proto protoreflect.FileDescriptor
+var File_pb_worker_proto protoreflect.FileDescriptor
 
-const file_pb_funsearch_proto_rawDesc = "" +
+const file_pb_worker_proto_rawDesc = "" +
 	"\n" +
-	"\x12pb/funsearch.proto\x12\x13funsearch_worker.pb\"q\n" +
+	"\x0fpb/worker.proto\x12\tworker.pb\"q\n" +
 	"\tCandidate\x12\x1e\n" +
 	"\n" +
 	"hypothesis\x18\x01 \x01(\tR\n" +
 	"hypothesis\x12\"\n" +
 	"\fquantitative\x18\x02 \x01(\x01R\fquantitative\x12 \n" +
-	"\vqualitative\x18\x03 \x01(\tR\vqualitative\"p\n" +
-	"\x0eProposeRequest\x128\n" +
-	"\aparents\x18\x01 \x03(\v2\x1e.funsearch_worker.pb.CandidateR\aparents\x12$\n" +
+	"\vqualitative\x18\x03 \x01(\tR\vqualitative\"f\n" +
+	"\x0eProposeRequest\x12.\n" +
+	"\aparents\x18\x01 \x03(\v2\x14.worker.pb.CandidateR\aparents\x12$\n" +
 	"\rspecification\x18\x02 \x01(\tR\rspecification\"5\n" +
 	"\x0fProposeResponse\x12\"\n" +
 	"\fhypothesises\x18\x01 \x03(\tR\fhypothesises\"0\n" +
@@ -312,37 +312,37 @@ const file_pb_funsearch_proto_rawDesc = "" +
 	"hypothesis\x18\x01 \x01(\tR\n" +
 	"hypothesis\x12\"\n" +
 	"\fquantitative\x18\x02 \x01(\x01R\fquantitative\x12 \n" +
-	"\vqualitative\x18\x03 \x01(\tR\vqualitative2\xbb\x01\n" +
-	"\tFUNSEARCH\x12V\n" +
-	"\apropose\x12#.funsearch_worker.pb.ProposeRequest\x1a$.funsearch_worker.pb.ProposeResponse\"\x00\x12V\n" +
-	"\aobserve\x12#.funsearch_worker.pb.ObserveRequest\x1a$.funsearch_worker.pb.ObserveResponse\"\x00B'Z%funsearch-orchestrator/internal/pb;pbb\x06proto3"
+	"\vqualitative\x18\x03 \x01(\tR\vqualitative2\x90\x01\n" +
+	"\x06WORKER\x12B\n" +
+	"\apropose\x12\x19.worker.pb.ProposeRequest\x1a\x1a.worker.pb.ProposeResponse\"\x00\x12B\n" +
+	"\aobserve\x12\x19.worker.pb.ObserveRequest\x1a\x1a.worker.pb.ObserveResponse\"\x00B\x1dZ\x1borchestrator/internal/pb;pbb\x06proto3"
 
 var (
-	file_pb_funsearch_proto_rawDescOnce sync.Once
-	file_pb_funsearch_proto_rawDescData []byte
+	file_pb_worker_proto_rawDescOnce sync.Once
+	file_pb_worker_proto_rawDescData []byte
 )
 
-func file_pb_funsearch_proto_rawDescGZIP() []byte {
-	file_pb_funsearch_proto_rawDescOnce.Do(func() {
-		file_pb_funsearch_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_pb_funsearch_proto_rawDesc), len(file_pb_funsearch_proto_rawDesc)))
+func file_pb_worker_proto_rawDescGZIP() []byte {
+	file_pb_worker_proto_rawDescOnce.Do(func() {
+		file_pb_worker_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_pb_worker_proto_rawDesc), len(file_pb_worker_proto_rawDesc)))
 	})
-	return file_pb_funsearch_proto_rawDescData
+	return file_pb_worker_proto_rawDescData
 }
 
-var file_pb_funsearch_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
-var file_pb_funsearch_proto_goTypes = []any{
-	(*Candidate)(nil),       // 0: funsearch_worker.pb.Candidate
-	(*ProposeRequest)(nil),  // 1: funsearch_worker.pb.ProposeRequest
-	(*ProposeResponse)(nil), // 2: funsearch_worker.pb.ProposeResponse
-	(*ObserveRequest)(nil),  // 3: funsearch_worker.pb.ObserveRequest
-	(*ObserveResponse)(nil), // 4: funsearch_worker.pb.ObserveResponse
+var file_pb_worker_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_pb_worker_proto_goTypes = []any{
+	(*Candidate)(nil),       // 0: worker.pb.Candidate
+	(*ProposeRequest)(nil),  // 1: worker.pb.ProposeRequest
+	(*ProposeResponse)(nil), // 2: worker.pb.ProposeResponse
+	(*ObserveRequest)(nil),  // 3: worker.pb.ObserveRequest
+	(*ObserveResponse)(nil), // 4: worker.pb.ObserveResponse
 }
-var file_pb_funsearch_proto_depIdxs = []int32{
-	0, // 0: funsearch_worker.pb.ProposeRequest.parents:type_name -> funsearch_worker.pb.Candidate
-	1, // 1: funsearch_worker.pb.FUNSEARCH.propose:input_type -> funsearch_worker.pb.ProposeRequest
-	3, // 2: funsearch_worker.pb.FUNSEARCH.observe:input_type -> funsearch_worker.pb.ObserveRequest
-	2, // 3: funsearch_worker.pb.FUNSEARCH.propose:output_type -> funsearch_worker.pb.ProposeResponse
-	4, // 4: funsearch_worker.pb.FUNSEARCH.observe:output_type -> funsearch_worker.pb.ObserveResponse
+var file_pb_worker_proto_depIdxs = []int32{
+	0, // 0: worker.pb.ProposeRequest.parents:type_name -> worker.pb.Candidate
+	1, // 1: worker.pb.WORKER.propose:input_type -> worker.pb.ProposeRequest
+	3, // 2: worker.pb.WORKER.observe:input_type -> worker.pb.ObserveRequest
+	2, // 3: worker.pb.WORKER.propose:output_type -> worker.pb.ProposeResponse
+	4, // 4: worker.pb.WORKER.observe:output_type -> worker.pb.ObserveResponse
 	3, // [3:5] is the sub-list for method output_type
 	1, // [1:3] is the sub-list for method input_type
 	1, // [1:1] is the sub-list for extension type_name
@@ -350,26 +350,26 @@ var file_pb_funsearch_proto_depIdxs = []int32{
 	0, // [0:1] is the sub-list for field type_name
 }
 
-func init() { file_pb_funsearch_proto_init() }
-func file_pb_funsearch_proto_init() {
-	if File_pb_funsearch_proto != nil {
+func init() { file_pb_worker_proto_init() }
+func file_pb_worker_proto_init() {
+	if File_pb_worker_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pb_funsearch_proto_rawDesc), len(file_pb_funsearch_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pb_worker_proto_rawDesc), len(file_pb_worker_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_pb_funsearch_proto_goTypes,
-		DependencyIndexes: file_pb_funsearch_proto_depIdxs,
-		MessageInfos:      file_pb_funsearch_proto_msgTypes,
+		GoTypes:           file_pb_worker_proto_goTypes,
+		DependencyIndexes: file_pb_worker_proto_depIdxs,
+		MessageInfos:      file_pb_worker_proto_msgTypes,
 	}.Build()
-	File_pb_funsearch_proto = out.File
-	file_pb_funsearch_proto_goTypes = nil
-	file_pb_funsearch_proto_depIdxs = nil
+	File_pb_worker_proto = out.File
+	file_pb_worker_proto_goTypes = nil
+	file_pb_worker_proto_depIdxs = nil
 }
