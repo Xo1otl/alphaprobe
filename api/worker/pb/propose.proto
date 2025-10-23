@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+import "google/protobuf/struct.proto";
+
+package worker.pb;
+option go_package = "orchestrator/internal/pb;pb";
+
+// Propose service generates new candidate hypothesises based on parent candidates.
+service Propose {
+  rpc propose(ProposeRequest) returns (ProposeResponse) {}
+}
+
+// Represents a candidate with its hypothesis and quantitative, used as input for Propose.
+message Candidate {
+  string hypothesis = 1;
+  // MAP-Elites have a single objective score.
+  double quantitative = 2;
+  string qualitative = 3;
+}
+
+// The request message for the Propose RPC.
+message ProposeRequest {
+  repeated Candidate parents = 1;
+  google.protobuf.Struct specification = 2;
+}
+
+// The response message for the Propose RPC.
+message ProposeResponse {
+  repeated string hypothesises = 1;
+}

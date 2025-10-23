@@ -5,28 +5,75 @@ set -eu
 ROOT_DIR=$(git rev-parse --show-toplevel)
 cd "$ROOT_DIR"
 
-# --- Generate Go code ---
-echo "Generating Go gRPC code..."
-GO_OUT_DIR="apps/orchestrator/internal/"
-mkdir -p "$GO_OUT_DIR"
-protoc \
-  -I api/worker \
-  --go_out="$GO_OUT_DIR" --go_opt=paths=source_relative \
-  --go-grpc_out="$GO_OUT_DIR" --go-grpc_opt=paths=source_relative \
-  api/worker/pb/worker.proto
-echo "Generated Go gRPC code in $GO_OUT_DIR"
+# Configuration
+PROTO_DIR="api/worker/pb"
+GO_OUT_DIR="apps/orchestrator/internal"
+PYTHON_OUT_DIR="apps/worker/src"
 
-echo "" # Add a newline for better readability
+# --- Generation Functions ---
 
-# --- Generate Python code ---
-echo "Generating Python gRPC code..."
-PYTHON_OUT_DIR="apps/worker/src/"
-python -m grpc_tools.protoc \
-  -I api \
-  --python_out="$PYTHON_OUT_DIR" \
-  --grpc_python_out="$PYTHON_OUT_DIR" \
-  --pyi_out="$PYTHON_OUT_DIR" \
-  api/worker/pb/worker.proto
-echo "Generated Python gRPC code in $PYTHON_OUT_DIR"
+# Generate Go gRPC code
+generate_go() {
+  local proto_files="$1"
+  echo "Generating Go gRPC code..."
+  mkdir -p "$GO_OUT_DIR"
 
-echo "Done."
+  protoc \
+    -I "api/worker" \
+    --go_out="$GO_OUT_DIR" --go_opt=paths=source_relative \
+    --go-grpc_out="$GO_OUT_DIR" --go-grpc_opt=paths=source_relative \
+    $proto_files
+
+  echo "Generated Go gRPC code in $GO_OUT_DIR"
+}
+
+# Generate Python gRPC code
+generate_python() {
+  local proto_files="$1"
+  echo "Generating Python gRPC code..."
+  mkdir -p "$PYTHON_OUT_DIR"
+
+  python -m grpc_tools.protoc \
+    -I "api" \
+    --python_out="$PYTHON_OUT_DIR" \
+    --grpc_python_out="$PYTHON_OUT_DIR" \
+    --pyi_out="$PYTHON_OUT_DIR" \
+    $proto_files
+
+  echo "Generated Python gRPC code in $PYTHON_OUT_DIR"
+}
+
+# --- Main Execution ---
+
+main() {
+  # Check dependencies
+  if ! command -v protoc &> /dev/null; then
+    echo "Error: protoc is not installed. Please install the protobuf compiler."
+    exit 1
+  fi
+
+  if ! python -m grpc_tools.protoc --version &> /dev/null; then
+    echo "Error: grpcio-tools is not installed. Please run 'pip install grpcio-tools'."
+    exit 1
+  fi
+
+  # Find proto files
+  local proto_files
+  proto_files=$(find "$PROTO_DIR" -name "*.proto")
+
+  if [ -z "$proto_files" ]; then
+    echo "No .proto files found in $PROTO_DIR. Nothing to generate."
+    exit 0
+  fi
+
+  echo "Found proto files to generate:"
+  echo "$proto_files"
+  echo ""
+
+  generate_go "$proto_files"
+  echo "" # Add a newline for better readability
+  generate_python "$proto_files"
+  echo "Done."
+}
+
+main "$@"

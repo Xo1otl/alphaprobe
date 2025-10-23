@@ -2,23 +2,24 @@ from dataclasses import dataclass
 from typing import Never
 
 import grpc
+from google.protobuf.json_format import MessageToDict
 
 from worker import pb, propose
 
 from ._llm import LLM
 from ._observe import ObserveRequest, handle_observe
-from ._prompt_template import Program, PromptTemplate
+from ._prompt_template import Program, PromptTemplate, Specification
 
 
 @dataclass
-class GRPCServicer(pb.WORKERServicer):
-    handle_propose: propose.HandlerFunc[Program]
+class GRPCServicer(pb.ProposeServicer, pb.ObserveServicer):
+    handle_propose: propose.HandlerFunc[Specification, Program]
 
     def propose(self, request: pb.ProposeRequest, context: Never) -> pb.ProposeResponse:
         try:
-            req = propose.Request[Program](
+            req = propose.Request[Specification, Program](
                 parents=[Program(skeleton=p.hypothesis, score=p.quantitative) for p in request.parents],
-                specification=request.specification,
+                specification=Specification(**MessageToDict(request.specification)),
             )
             res = self.handle_propose(req)
             return pb.ProposeResponse(hypothesises=res.hypothesises)

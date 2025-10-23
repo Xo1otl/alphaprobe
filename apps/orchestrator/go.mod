@@ -20,6 +20,7 @@ require (
 )
 
 tool (
+	github.com/fullstorydev/grpcurl/cmd/grpcurl
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc
 	google.golang.org/protobuf/cmd/protoc-gen-go
 )

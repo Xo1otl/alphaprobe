@@ -12,10 +12,13 @@ logging.basicConfig(level=logging.INFO)
 
 def main() -> None:
     server = grpc.server(futures.ThreadPoolExecutor(max_workers=None))
-    pb.add_WORKERServicer_to_server(llmsr.new_grpc_servicer(), server)  # pyright: ignore[reportUnknownMemberType]
+    servicer = llmsr.new_grpc_servicer()
+    pb.add_ProposeServicer_to_server(servicer, server)  # pyright: ignore[reportUnknownMemberType]
+    pb.add_ObserveServicer_to_server(servicer, server)  # pyright: ignore[reportUnknownMemberType]
 
     service_names = (
-        pb.DESCRIPTOR.services_by_name["WORKER"].full_name,
+        pb.PROPOSE_DESCRIPTOR.services_by_name["Propose"].full_name,
+        pb.OBSERVE_DESCRIPTOR.services_by_name["Observe"].full_name,
         reflection.SERVICE_NAME,
     )
     reflection.enable_server_reflection(service_names, server)

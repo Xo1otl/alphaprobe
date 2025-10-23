@@ -70,64 +70,18 @@ func TestLLMSR_WithMock(t *testing.T) {
 }
 
 func TestLLMSR_WithGRPCServer(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
-	defer cancel()
-
-	_, filename, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatalf("Failed to get caller information")
-	}
-	dir := filepath.Dir(filename)
-	pythonPath := filepath.Join(dir, "../../../../../../", ".venv/bin/python")
-
-	cmd := exec.CommandContext(ctx,
-		pythonPath, "-u",
-		"-c", "import worker; worker.main()",
-	)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		t.Fatalf("Failed to get stdout pipe: %v", err)
-	}
-	cmd.Stderr = cmd.Stdout
-	if err := cmd.Start(); err != nil {
-		t.Fatalf("Failed to start gRPC server: %v", err)
-	}
-	defer func() {
-		if err := cmd.Process.Kill(); err != nil {
-			t.Logf("Failed to kill process: %v", err)
-		}
-		cmd.Wait()
-	}()
-
-	serverReady := make(chan bool)
-	expectedOutput := "gRPC server started"
-	go func() {
-		scanner := bufio.NewScanner(stdout)
-		for scanner.Scan() {
-			line := scanner.Text()
-			t.Logf("[gRPC Server]: %s", line)
-			if strings.Contains(line, expectedOutput) {
-				t.Log("gRPC server is ready.")
-				close(serverReady)
-				return
-			}
-		}
-	}()
-	select {
-	case <-serverReady:
-	case <-ctx.Done():
-		t.Fatal("Timeout waiting for gRPC server to start.")
-	}
-
+	killServer := setupGRPCServer(t)
+	defer killServer()
 	conn, err := grpc.NewClient("localhost:50051", grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		t.Fatalf("Failed to connect to gRPC server: %v", err)
 	}
 	defer conn.Close()
 
-	client := pb.NewWORKERClient(conn)
-	proposeFn := llmsr.NewGRPCPropose(client)
-	observeFn := llmsr.NewGRPCObserve(client)
+	proposeClient := pb.NewProposeClient(conn)
+	observeClient := pb.NewObserveClient(conn)
+	proposeFn := llmsr.NewGRPCPropose(proposeClient)
+	observeFn := llmsr.NewGRPCObserve(observeClient)
 
 	state, initialScore := newInitialState(t, observeFn)
 	esState, getTrace := bilevel.WithEventSourcing(state)
@@ -249,4 +203,56 @@ func getBestScore(s *llmsr.DeterministicState) llmsr.ProgramScore {
 		}
 	}
 	return bestScore
+}
+
+func setupGRPCServer(t *testing.T) func() {
+	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+
+	_, filename, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatalf("Failed to get caller information")
+	}
+	dir := filepath.Dir(filename)
+	pythonPath := filepath.Join(dir, "../../../../../../", ".venv/bin/python")
+
+	cmd := exec.CommandContext(ctx,
+		pythonPath, "-u",
+		"-c", "import worker; worker.main()",
+	)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatalf("Failed to get stdout pipe: %v", err)
+	}
+	cmd.Stderr = cmd.Stdout
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("Failed to start gRPC server: %v", err)
+	}
+
+	serverReady := make(chan bool)
+	expectedOutput := "gRPC server started"
+	go func() {
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			line := scanner.Text()
+			t.Logf("[gRPC Server]: %s", line)
+			if strings.Contains(line, expectedOutput) {
+				t.Log("gRPC server is ready.")
+				close(serverReady)
+				return
+			}
+		}
+	}()
+	select {
+	case <-serverReady:
+	case <-ctx.Done():
+		t.Fatal("Timeout waiting for gRPC server to start.")
+	}
+
+	return func() {
+		if err := cmd.Process.Kill(); err != nil {
+			t.Logf("Failed to kill process: %v", err)
+		}
+		cmd.Wait()
+		cancel()
+	}
 }

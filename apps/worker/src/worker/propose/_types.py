@@ -3,9 +3,9 @@ from dataclasses import dataclass
 
 
 @dataclass(frozen=True)
-class Request[T]:
-    parents: list[T]
-    specification: str
+class Request[S, P]:
+    parents: list[P]
+    specification: S
 
 
 @dataclass(frozen=True)
@@ -13,4 +13,4 @@ class Response:
     hypothesises: list[str]
 
 
-type HandlerFunc[T] = Callable[[Request[T]], Response]
+type HandlerFunc[S, P] = Callable[[Request[S, P]], Response]

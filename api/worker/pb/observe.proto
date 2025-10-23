@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package worker.pb;
+
+option go_package = "orchestrator/internal/pb;pb";
+
+// Observe service evaluates a given candidate hypothesis and returns its performance quantitative.
+service Observe {
+  rpc observe(ObserveRequest) returns (ObserveResponse) {}
+}
+
+// The request message for the Observe RPC.
+message ObserveRequest {
+  string hypothesis = 1;
+}
+
+// The response message for the Observe RPC.
+message ObserveResponse {
+  // The original hypothesis from the request, to associate the quantitative correctly.
+  string hypothesis = 1;
+  double quantitative = 2;
+  string qualitative = 3;
+}

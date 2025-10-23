@@ -1,25 +1,38 @@
-from .worker_pb2 import (
+from .observe_pb2 import (
     ObserveRequest,
     ObserveResponse,
+    DESCRIPTOR as OBSERVE_DESCRIPTOR,
+)
+from .observe_pb2_grpc import (
+    ObserveServicer,
+    ObserveStub,
+    add_ObserveServicer_to_server, # pyright: ignore[reportUnknownVariableType]
+)
+
+from .propose_pb2 import (
     Candidate,
     ProposeRequest,
     ProposeResponse,
-    DESCRIPTOR,
+    DESCRIPTOR as PROPOSE_DESCRIPTOR,
 )
-from .worker_pb2_grpc import (
-    WORKERServicer,
-    WORKERStub,
-    add_WORKERServicer_to_server, # pyright: ignore[reportUnknownVariableType]
+from .propose_pb2_grpc import (
+    add_ProposeServicer_to_server, # pyright: ignore[reportUnknownVariableType]
+    ProposeServicer,
+    ProposeStub,
 )
 
 __all__ = [
-    "DESCRIPTOR",
     "ObserveRequest",
     "ObserveResponse",
+    "add_ObserveServicer_to_server",
+    "ObserveServicer",
+    "ObserveStub",
     "Candidate",
     "ProposeRequest",
     "ProposeResponse",
-    "WORKERServicer",
-    "WORKERStub",
-    "add_WORKERServicer_to_server",
+    "add_ProposeServicer_to_server",
+    "ProposeServicer",
+    "ProposeStub",
+    "OBSERVE_DESCRIPTOR",
+    "PROPOSE_DESCRIPTOR",
 ]

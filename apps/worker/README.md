@@ -1,39 +1,25 @@
 # Introduction
 
-The `orchestrator` is implemented in Go to manage the search process, while the computationally intensive tasks of program generation and numerical optimization are handled by Python libraries like JAX and NumPy. `funsearch-worker` serves as a dedicated computational service to bridge this language gap, providing a safe and efficient interface between the two environments.
+The `orchestrator` (Go) manages the search process, while computationally intensive tasks are delegated to Python. The `worker` is a gRPC service that provides a type-safe interface between these two environments.
 
 # Overview
 
-`funsearch-worker` is a Python-based gRPC server that exposes two independent RPC endpoints: the **`Propose` Service** and the **`Observe` Service**. This document also details the **Project Structure** and **Usage**. The separation of services allows the Go-based `orchestrator` to call only the necessary computational service for each phase of the search, keeping the core logic clean and focused.
+`worker` is a Python-based gRPC server. It exposes multiple **`Propose` Services** for generating candidate hypotheses and an **`Observe` Service** for evaluating them. This document also covers **Usage**.
 
-# Project Structure
+# Propose Services
 
-The `funsearch-worker` is structured like below.
+The `Propose` services are a set of RPCs used by the `orchestrator` to generate new candidate hypotheses. Each service corresponds to a specific proposal strategy (e.g., `LLMSRPropose`, `CodePropose`) and has its own strongly-typed request message.
 
-```
-.
-├── api/
-├── src/
-│   └── funsearch_worker/
-│       └── __init__.py
-├── pyproject.toml
-└── README.md
-```
+This design uses the `.proto` schema to define the required configuration for each strategy. To add a new proposal method, a new RPC and its corresponding request/response messages must be added to the `.proto` file, ensuring type safety between the client and server.
 
-- **`api/`**: Contains Protocol Buffers (`.proto`) files that define the gRPC service contracts for the `Propose` and `Observe` services, including their request and response message types.
-- **`src/funsearch_worker/`**: Contains the core application logic and implements the gRPC services defined in the `api/` directory.
+# Observe Service
 
-# `Propose` Service
-
-The `Propose` service is called by the `orchestrator` to generate a new program candidate. It receives contextual information, such as existing programs and the problem definition, and constructs a prompt for a Large Language Model (LLM). After executing inference, it parses the LLM's response and returns an executable program skeleton to the `orchestrator`.
-
-# `Observe` Service
-
-The `Observe` service is called by the `orchestrator` to evaluate a program candidate's performance. It receives a program skeleton and an evaluation dataset. Using numerical computation libraries like JAX and SciPy, it optimizes the parameters within the skeleton against the dataset. Finally, it calculates a performance score for the optimized program and returns it to the `orchestrator`.
+The `Observe` service is an RPC called by the `orchestrator` to evaluate the performance of a candidate hypothesis. It receives a hypothesis, optimizes its free parameters against a dataset, and returns quantitative and qualitative performance scores.
 
 # Usage
+
 To start the gRPC server, run the following command from the project's root directory:
 
 ```sh
-uv run funsearch-worker
+uv run worker
 ```
