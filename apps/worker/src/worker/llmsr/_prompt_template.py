@@ -66,12 +66,14 @@ PRAMS_INIT = [0] * MAX_NPARAMS
     # TODO: Propose a new equation based on context programs.
 ```
 
-# Output format
+# Notes
 * If you believe physical constants with specific values are needed, use `params` (up to `MAX_NPARAMS`) as placeholder values to be set by the optimizer.
-* DO NOT include any comments in the code block because it will be ignored by the parser.
+* DO NOT include any comments or docstrings in the code block because it will be ignored by the parser.
+* Avoid any conditional logic (e.g., `if` statements) or value checks.
 
 # Task
-Suggest {spec.num_proposals} new equations to improve the performance of the function that is inspired by your expert knowledge of the subject.
+Your goal is to find any equations that maximize the quantitative score.
+Suggest {spec.num_proposals} alternative, new equations inspired by your expert knowledge of the subject.
 Please provide ONLY the Python code for the improved function, including the `def` header, enclosed in a code block.
 """  # noqa: E501
 

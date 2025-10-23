@@ -18,6 +18,7 @@ class LLM(propose.LLM):
             contents=prompt,
             config=GenerateContentConfig(thinking_config=ThinkingConfig(thinking_budget=0)),
         )
+
         if response.text is None:
             msg = "Response text is None"
             raise ValueError(msg)
