@@ -5,7 +5,12 @@ description = "worker gRPC server"
 readme = "README.md"
 authors = [{ name = "Xo1otl", email = "xolotl.mictl4n@gmail.com" }]
 requires-python = ">=3.13"
-dependencies = ["grpcio>=1.75.1", "grpcio-reflection>=1.75.1", "pytest>=8.4.2"]
+dependencies = [
+    "google-genai>=1.55.0",
+    "grpcio>=1.75.1",
+    "grpcio-reflection>=1.75.1",
+    "pytest>=8.4.2",
+]
 
 [project.scripts]
 worker = "worker:main"
