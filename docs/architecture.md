@@ -139,7 +139,7 @@ Rel(observe, state, "Sends Observe result")
 
 
 ' --- Persistence ---
-Rel(application, repository, "Save State (Periodically)")
+Rel(application, repository, "Save State (Unit of Work)")
 Rel(repository, state, "Create Memento")
 Rel_Back(state, repository, "Persist State")
 
